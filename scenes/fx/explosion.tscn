@@ -1,0 +1,43 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/fx/explosion.gd" id="1_expl"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_fireball"]
+radius = 1.0
+height = 2.0
+radial_segments = 24
+rings = 12
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fireball"]
+transparency = 1
+shading_mode = 0
+emission_enabled = true
+emission = Color(1.0, 0.62, 0.12, 1)
+emission_energy_multiplier = 8.0
+albedo_color = Color(1.0, 0.78, 0.35, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_shell"]
+radius = 1.0
+height = 2.0
+radial_segments = 24
+rings = 12
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shell"]
+transparency = 1
+shading_mode = 0
+cull_mode = 2
+emission_enabled = true
+emission = Color(1.0, 0.4, 0.08, 1)
+emission_energy_multiplier = 3.0
+albedo_color = Color(1.0, 0.45, 0.12, 0.45)
+
+[node name="Explosion" type="Node3D"]
+script = ExtResource("1_expl")
+
+[node name="Fireball" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_fireball")
+surface_material_override/0 = SubResource("StandardMaterial3D_fireball")
+
+[node name="Shell" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_shell")
+surface_material_override/0 = SubResource("StandardMaterial3D_shell")

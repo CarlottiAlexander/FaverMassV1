@@ -1,0 +1,13 @@
+Ultimate Guns Pack — Quaternius (https://quaternius.com)
+
+License: Creative Commons Zero (CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+Free for personal and commercial use. Attribution appreciated but not required.
+
+Modelos usados en este proyecto (8 de las 10 armas):
+  pistol, revolver, smg, ak47, shotgun, sniper, lmg, minigun
+
+Las 2 restantes (railgun, rocket) son del Blaster Kit de Kenney — ver
+LICENSE_kenney_blaster-kit.txt — porque su estetica sci-fi encaja mejor
+para un arma de energia y un lanzacohetes futurista.

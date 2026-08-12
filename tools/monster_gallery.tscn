@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tools/monster_gallery.gd" id="1_mon_gal"]
+
+[node name="MonsterGallery" type="Node3D"]
+script = ExtResource("1_mon_gal")

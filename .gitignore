@@ -1,0 +1,22 @@
+# Godot 4 generated/local files
+.godot/
+.import/
+export.cfg
+export_presets.cfg
+*.translation
+
+# Godot-specific ignores
+.mono/
+data_*/
+
+# Zips y carpetas crudas de los packs de assets descargados (~55 MB).
+# Lo que el juego usa ya está copiado bajo assets/ — esto es el material sin filtrar.
+assets_import/
+
+# Builds exportados
+build/
+*.exe
+*.pck
+
+# Notas internas de desarrollo (contexto de trabajo, no documentacion del proyecto)
+CLAUDE.md
