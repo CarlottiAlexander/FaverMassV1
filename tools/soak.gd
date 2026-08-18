@@ -67,7 +67,7 @@ func _run() -> void:
 		if player.current_weapon == "railgun":
 			if player.railgun_beam_remaining > 0.0:
 				player.railgun_beam_remaining = maxf(0.0, player.railgun_beam_remaining - get_physics_process_delta_time())
-				player._railgun_tick()
+				player.ballistics.railgun_sweep()
 				if player.railgun_beam_remaining <= 0.0:
 					player._railgun_exhaust()
 		elif player.ammo > 0 and player.fire_timer <= 0.0 and f % 6 == 0:

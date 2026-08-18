@@ -17,9 +17,10 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 
 [autoload]
 
-GameData="*res://scripts/game_data.gd"
-GameState="*res://scripts/game_state.gd"
-FxManager="*res://scripts/fx_manager.gd"
+GameData="*res://scripts/core/game_data.gd"
+GameState="*res://scripts/core/game_state.gd"
+FxManager="*res://scripts/core/fx_manager.gd"
+Config="*res://scripts/core/config.gd"
 
 [display]
 

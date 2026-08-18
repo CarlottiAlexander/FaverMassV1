@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://scripts/fx/explosion.gd" id="1_expl"]
+[ext_resource type="Script" path="res://scripts/features/fx/explosion.gd" id="1_expl"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_fireball"]
 radius = 1.0

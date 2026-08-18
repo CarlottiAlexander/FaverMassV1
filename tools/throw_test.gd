@@ -41,7 +41,7 @@ func _run() -> void:
 		knight.global_position.distance_to(start)])
 
 	knight.knight_grab_cooldown = 0.0
-	knight._try_grab_zombie()
+	EnemyBehaviors.try_grab_zombie(knight)
 	print("tras el agarre: thrown=%s  thrown_velocity=%s" % [hollow.thrown, hollow.thrown_velocity])
 
 	var peak_y := start.y

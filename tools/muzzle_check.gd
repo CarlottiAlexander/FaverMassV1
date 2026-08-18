@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	await get_tree().process_frame
-	var view = preload("res://scripts/weapon_view.gd").new()
+	var view = preload("res://scripts/features/player/weapon_view.gd").new()
 	add_child(view)
 	await get_tree().process_frame
 

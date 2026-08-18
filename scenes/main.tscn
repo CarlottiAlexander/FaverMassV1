@@ -1,10 +1,10 @@
 [gd_scene load_steps=10 format=3]
 
-[ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
-[ext_resource type="Script" path="res://scripts/wave_manager.gd" id="2_wave"]
+[ext_resource type="Script" path="res://scripts/features/player/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/features/waves/wave_manager.gd" id="2_wave"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="3_enemy_scene"]
-[ext_resource type="Script" path="res://scripts/ui.gd" id="4_ui"]
-[ext_resource type="Script" path="res://scripts/world.gd" id="5_world"]
+[ext_resource type="Script" path="res://scripts/features/ui/ui.gd" id="4_ui"]
+[ext_resource type="Script" path="res://scripts/features/world/world.gd" id="5_world"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.05, 0.03, 0.08, 1)

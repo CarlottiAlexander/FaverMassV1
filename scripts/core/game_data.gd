@@ -13,9 +13,6 @@ const CROUCH_MULT := 0.5
 const JUMP_FORCE := 8.0
 const MAX_HEALTH := 100.0
 const MAX_ECSTASY := 100.0
-const FOV_DEFAULT := 90.0
-const FOV_MIN := 60.0
-const FOV_MAX := 110.0
 ## Más allá de esta distancia los enemigos NO se dibujan ni se animan. Va de la
 ## mano con la pared de niebla de `main.tscn` (opaca a 30): el corte tiene que
 ## caer detrás de la niebla para que no se vea aparecer nada de la nada.
@@ -169,6 +166,22 @@ const ENEMY_COLOR := {
 	"sorceress": Color(0.35, 0.05, 0.45), "demon_skull": Color(0.7, 0.3, 0.05),
 }
 
+# --- 3.4 Daño final de un disparo ---
+## Daño base del arma pasado por rareza y por spin-up. Vive acá y no en
+## `player.gd` porque es una FÓRMULA DE BALANCE igual que `hp_mult_of` o
+## `roll_rarity`: cambiar cuánto pega un arma legendaria tiene que ser tocar este
+## archivo y ninguno más.
+static func weapon_damage(w: Dictionary, rarity: int, spinup: float = 1.0) -> float:
+	var dmg: float = w["damage"]
+	if w.get("exp_damage", false):
+		# `exp_damage`: la rareza DUPLICA por escalón en vez de usar la tabla.
+		dmg = dmg * pow(2.0, rarity)
+	else:
+		dmg = dmg * RARITY_DAMAGE_MULT[rarity]
+	if w.get("spinup", false):
+		dmg *= spinup
+	return dmg
+
 # --- 5. Éxtasis ---
 static func ecstasy_manual_tier(xp: float) -> int:
 	# devuelve -1 (nada), o Rarity a otorgar. Railgun se maneja aparte (>=100 y no equipado).
@@ -319,46 +332,9 @@ static func spawn_interval(wave: int) -> float:
 static func chaos_level(wave: int) -> float:
 	return min(wave / 10.0, 3.0)
 
-# --- 11. Configuración persistente ---
-const CONFIG_PATH := "user://config.cfg"
-
-var master_volume := 0.8
-var sfx_volume := 1.0
-var mouse_sensitivity := 0.002
-var fov := 90.0
-var fullscreen := false
-
-func load_config() -> void:
-	if not FileAccess.file_exists(CONFIG_PATH):
-		return
-	var f := FileAccess.open(CONFIG_PATH, FileAccess.READ)
-	while not f.eof_reached():
-		var line := f.get_line().strip_edges()
-		if line == "" or not line.contains("="):
-			continue
-		var parts := line.split("=", true, 1)
-		var key := parts[0].strip_edges()
-		var value := parts[1].strip_edges()
-		match key:
-			"master_volume": master_volume = clampf(value.to_float(), 0.0, 1.0)
-			"sfx_volume": sfx_volume = clampf(value.to_float(), 0.0, 1.0)
-			"mouse_sensitivity": mouse_sensitivity = clampf(value.to_float(), 0.0005, 0.01)
-			"fov": fov = clampf(value.to_float(), FOV_MIN, FOV_MAX)
-			"fullscreen": fullscreen = value == "true"
-			_: pass  # claves desconocidas se ignoran
-
-func save_config() -> void:
-	var f := FileAccess.open(CONFIG_PATH, FileAccess.WRITE)
-	f.store_line("master_volume=%s" % master_volume)
-	f.store_line("sfx_volume=%s" % sfx_volume)
-	f.store_line("mouse_sensitivity=%s" % mouse_sensitivity)
-	f.store_line("fov=%s" % fov)
-	f.store_line("fullscreen=%s" % ("true" if fullscreen else "false"))
-
-func apply_fullscreen() -> void:
-	DisplayServer.window_set_mode(
-		DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
-	)
-
-func _ready() -> void:
-	load_config()
+# La configuración que el jugador cambia (volumen, sensibilidad, FOV, pantalla
+# completa) NO vive acá: está en el autoload `Config` (scripts/core/config.gd).
+# Escribía a disco y tocaba el DisplayServer, y este archivo tiene que poder
+# leerse como una tabla de balance pura — sin estado de sesión y sin depender de
+# la plataforma. Las constantes FOV_MIN / FOV_MAX / FOV_DEFAULT se fueron con
+# ella, porque son los límites de ese ajuste y no números de balance.

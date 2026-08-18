@@ -6,7 +6,7 @@ extends Node
 ## Correr:  Godot --headless --path . tools/spinup_test.tscn
 ## (como escena y no con --script, porque necesita los autoloads GameData/GameState)
 
-const P := preload("res://scripts/player.gd")
+const P := preload("res://scripts/features/player/player.gd")
 
 func _ready() -> void:
 	var w: Dictionary = GameData.WEAPONS["smg"]
