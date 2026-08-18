@@ -50,6 +50,22 @@ const ANIM_STRIDE_VERY_FAR := 4
 const ANIM_BUDGET_FULL := 24    # estos animan todos los frames
 const ANIM_BUDGET_HALF := 64    # estos, uno de cada dos
 
+## ACUSE DE RECIBO DEL IMPACTO: un destello rojo más un frenón breve. Los dos
+## salen del mismo disparador (`_react_to_hit`) y comparten cooldown, así que se
+## leen como un solo "tick" por golpe.
+## El cooldown es la pieza importante: la Minigun mete ~15 balas por segundo y
+## sin él el enemigo quedaba en estroboscopio y frenado de forma permanente.
+## Pedido textual: "que estos ticks tengan un delay razonable uno entre otro".
+const HIT_FLASH_TIME := 0.08
+const HIT_SLOW_TIME := 0.12
+const HIT_REACT_COOLDOWN := 0.18
+## Cuánto de su velocidad conserva mientras acusa el golpe. Es un frenón, no un
+## stun. Ojo que esto TOCA EL BALANCE: bajo fuego sostenido el tick se renueva
+## cada 0.18 s y el enemigo pasa 2/3 del tiempo frenado, o sea que avanza a
+## ~0.77x mientras le disparás. Bajarlo mucho más y las oleadas altas dejan de
+## alcanzarte.
+const HIT_SLOW_FACTOR := 0.65
+
 ## Los personajes de KayKit traen adentro TODO el equipamiento del set montado en
 ## las manos (el Knight carga 3 espadas y 4 escudos a la vez, el Blood Lord dos
 ## ballestas). Cuentan para lo que se ve, pero NO para el volumen del cuerpo: un
@@ -159,6 +175,14 @@ var orbit_radius := 25.0
 var skull_timer := 0.0
 
 var counts_for_wave := true
+
+## Mallas del modelo (sin el aura del alpha), cacheadas en _apply_render_cull.
+## El destello las recorre al encender y al apagar; volver a caminar el árbol
+## por cada bala recibida no tenía sentido.
+var _flash_meshes: Array = []
+var _flash_time := 0.0
+var _slow_time := 0.0
+var _react_cd := 0.0
 
 ## Esfera de cabeza en espacio LOCAL del enemigo, medida del modelo real en
 ## _fit_head. `head_hit_radius == 0` significa "no se pudo medir" y se cae a la
@@ -402,9 +426,13 @@ func _build_model() -> void:
 ## distancia la pared de niebla ya es opaca, así que no se ve nada aparecer ni
 ## desaparecer. Va después del injerto de cabeza para alcanzarlo también.
 func _apply_render_cull() -> void:
-	for m in _all_mesh_nodes(self):
+	var meshes := _all_mesh_nodes(self)
+	for m in meshes:
 		m.visibility_range_end = GameData.ENEMY_LOD_DISTANCE
 		m.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
+	# El aura del alpha queda AFUERA del destello: es su marca de identidad y
+	# pintarla de rojo la borraría justo cuando más se le está disparando.
+	_flash_meshes = meshes.filter(func(m: MeshInstance3D) -> bool: return m != aura)
 
 func _build_imported_model(path: String) -> void:
 	var scene: PackedScene = load(path)
@@ -979,6 +1007,15 @@ func _process(delta: float) -> void:
 	if dead or not model_root:
 		return
 
+	# El destello se apaga ACÁ ARRIBA, antes de todos los cortes por distancia y
+	# visibilidad que vienen abajo. Si se apagara después, a un enemigo golpeado
+	# que sale de cámara o se mete en la niebla no le llegaba nunca el apagado y
+	# volvía a aparecer rojo permanente.
+	if _flash_time > 0.0:
+		_flash_time -= delta
+		if _flash_time <= 0.0:
+			_set_flash(false)
+
 	# Modelo KayKit: locomoción por animación real del rig, no por bamboleo de
 	# pivotes. La velocidad de reproducción sigue la velocidad real del enemigo
 	# para que no "patine" (pies moviéndose a distinto ritmo que el suelo).
@@ -1081,6 +1118,10 @@ func _physics_process(delta: float) -> void:
 		_face_player()
 
 	attack_timer -= delta
+	if _react_cd > 0.0:
+		_react_cd -= delta
+	if _slow_time > 0.0:
+		_slow_time -= delta
 
 	if thrown:
 		_process_thrown(delta)
@@ -1104,6 +1145,19 @@ func _physics_process(delta: float) -> void:
 			_behavior_wobble_flight(delta)
 		_:
 			_behavior_direct_chase(delta)
+
+	# Frenón del impacto. Va ACÁ, sobre lo que dejó el comportamiento, y no
+	# multiplicando `speed`: así alcanza también a los que no se mueven leyendo
+	# `speed` (el dash del Knight, el salto de la Capra, la órbita de la
+	# Sorceress) sin tener que tocar los siete comportamientos uno por uno.
+	# No se acumula frame a frame porque todos reescriben `velocity` entera.
+	# Sólo el plano horizontal: escalar la vertical le robaría altura a los
+	# saltos y pelearía con la gravedad de más abajo.
+	# El enemigo LANZADO por el Knight sale antes de llegar acá, a propósito —
+	# frenarle el arco en el aire lo dejaba cayendo como una piedra.
+	if _slow_time > 0.0:
+		velocity.x *= HIT_SLOW_FACTOR
+		velocity.z *= HIT_SLOW_FACTOR
 
 	_resolve_separation(delta)
 
@@ -1448,6 +1502,46 @@ func take_damage(amount: float, is_headshot: bool = false, hit_from: Vector3 = V
 		health -= amount
 	if health <= 0.0:
 		_die(is_headshot, hit_from)
+		return
+	_react_to_hit()
+
+## Un solo "tick" de acuse por golpe: destello + frenón, ambos detrás del mismo
+## cooldown. Los golpes que caen dentro del cooldown se ignoran para el feedback
+## (el DAÑO se aplica siempre, arriba) — si no, con las armas automáticas esto
+## se disparaba varias veces por frame.
+func _react_to_hit() -> void:
+	if _react_cd > 0.0:
+		return
+	_react_cd = HIT_REACT_COOLDOWN
+	_slow_time = HIT_SLOW_TIME
+	if _flash_time <= 0.0:
+		_set_flash(true)
+	_flash_time = HIT_FLASH_TIME
+
+## UN material para todo el juego, no uno por enemigo. Duplicar materiales por
+## instancia rompería el caché de `_surface_material()` y con él el batcheo — ver
+## el comentario de `_mat_cache`. `material_override` PISA el material sin tocar
+## el original, así que apagar el destello es volver a poner null.
+static var _flash_material: StandardMaterial3D = null
+
+static func _get_flash_material() -> StandardMaterial3D:
+	if _flash_material == null:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.35, 0.02, 0.02)
+		# Por encima del `glow_hdr_threshold` del entorno (1.25), así que el
+		# destello además florece. Es lo que lo hace legible en una turba: se ve
+		# CUÁL de los enemigos amontonados es el que estás golpeando.
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.08, 0.06)
+		m.emission_energy_multiplier = 1.5
+		_flash_material = m
+	return _flash_material
+
+func _set_flash(on: bool) -> void:
+	var mat: StandardMaterial3D = _get_flash_material() if on else null
+	for m in _flash_meshes:
+		if is_instance_valid(m):
+			m.material_override = mat
 
 func railgun_kill(hit_from: Vector3) -> void:
 	if dead:
