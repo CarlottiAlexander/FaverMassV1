@@ -1,10 +1,10 @@
 [gd_scene load_steps=10 format=3]
 
-[ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
-[ext_resource type="Script" path="res://scripts/wave_manager.gd" id="2_wave"]
+[ext_resource type="Script" path="res://scripts/features/player/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/features/waves/wave_manager.gd" id="2_wave"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="3_enemy_scene"]
-[ext_resource type="Script" path="res://scripts/ui.gd" id="4_ui"]
-[ext_resource type="Script" path="res://scripts/world.gd" id="5_world"]
+[ext_resource type="Script" path="res://scripts/features/ui/ui.gd" id="4_ui"]
+[ext_resource type="Script" path="res://scripts/features/world/world.gd" id="5_world"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.05, 0.03, 0.08, 1)
@@ -19,7 +19,7 @@ sky_material = SubResource("ProceduralSkyMaterial_1")
 background_mode = 2
 sky = SubResource("Sky_1")
 ambient_light_source = 3
-ambient_light_color = Color(0.36, 0.31, 0.38, 1)
+ambient_light_color = Color(0.46, 0.19, 0.2, 1)
 ambient_light_sky_contribution = 0.45
 ambient_light_energy = 1.45
 tonemap_mode = 3
@@ -80,6 +80,7 @@ light_energy = 1.05
 light_angular_distance = 1.2
 light_specular = 0.6
 shadow_enabled = true
+shadow_opacity = 0.34
 shadow_bias = 0.03
 shadow_normal_bias = 1.5
 shadow_blur = 1.4

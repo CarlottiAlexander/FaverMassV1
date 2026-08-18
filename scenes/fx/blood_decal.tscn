@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3]
 
-[ext_resource type="Script" path="res://scripts/fx/blood_decal.gd" id="1_decal"]
+[ext_resource type="Script" path="res://scripts/features/fx/blood_decal.gd" id="1_decal"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_decal"]
 size = Vector2(0.7, 0.7)

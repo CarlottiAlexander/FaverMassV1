@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3]
 
-[ext_resource type="Script" path="res://scripts/fx/gib.gd" id="1_gib"]
+[ext_resource type="Script" path="res://scripts/features/fx/gib.gd" id="1_gib"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_gib"]
 size = Vector3(0.18, 0.14, 0.18)

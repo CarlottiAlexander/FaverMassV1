@@ -41,12 +41,12 @@ func _ready() -> void:
 
 	# Cámara igual a la del jugador (mismo FOV y altura)
 	camera = Camera3D.new()
-	camera.fov = GameData.fov
+	camera.fov = Config.fov
 	camera.current = true
 	add_child(camera)
 
 	# Mismo viewmodel y misma posición que player.gd
-	weapon_view = preload("res://scripts/weapon_view.gd").new()
+	weapon_view = preload("res://scripts/features/player/weapon_view.gd").new()
 	weapon_view.position = Vector3(0.20, -0.19, -0.28)
 	camera.add_child(weapon_view)
 

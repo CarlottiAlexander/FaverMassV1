@@ -85,6 +85,20 @@ func _generate_obstacles() -> void:
 		mat.metallic = 0.08
 		mat.metallic_specular = 0.4
 		mat.uv1_scale = Vector3(w * 0.5, h * 0.5, d * 0.5)
+		# Piedra oscura sobre piso oscuro: reportado jugando, no se veía dónde
+		# empezaba un bloque hasta chocarlo. La emisión es MUY baja a propósito —
+		# alcanza para separar el volumen del fondo sin convertir el obstáculo en
+		# una lámpara ni aplanar el sombreado. El contorno lo dibuja el `rim`, que
+		# es lo que realmente lo DELIMITA: se enciende en los bordes vistos de
+		# canto, justo donde termina la silueta.
+		# Emisión y no una OmniLight por bloque: 20 luces con sombra costarían más
+		# que todo el resto del mundo junto.
+		mat.emission_enabled = true
+		mat.emission = Color(0.42, 0.16, 0.20)
+		mat.emission_energy_multiplier = 0.35
+		mat.rim_enabled = true
+		mat.rim = 0.55
+		mat.rim_tint = 0.3
 		mesh_instance.set_surface_override_material(0, mat)
 		body.add_child(mesh_instance)
 
@@ -119,6 +133,17 @@ func _generate_walls() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.4, 0.05, 0.08, 0.35)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		# El muro casi no se veía: con alpha 0.35 y un rojo oscuro se confundía con
+		# el fondo, y se llegaba al borde de la arena sin saberlo. Ahora emite, así
+		# que marca el límite por sí mismo.
+		# El valor está MEDIDO con capturas, no elegido a ojo: al mezclar en alpha
+		# el color emitido se escala por el alpha, así que la energía útil es
+		# ~0.35 de la nominal. Con 3.0 el muro salía como una franja de neón que
+		# blanqueaba media pantalla; 0.85 deja un rojo apagado que se lee contra
+		# el fondo negro sin encandilar.
+		mat.emission_enabled = true
+		mat.emission = Color(0.85, 0.12, 0.15)
+		mat.emission_energy_multiplier = 0.85
 		mesh_instance.set_surface_override_material(0, mat)
 		body.add_child(mesh_instance)
 

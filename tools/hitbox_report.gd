@@ -32,7 +32,7 @@ func _ready() -> void:
 
 		print("=== %-12s %s   cubre Y %.2f..%.2f" % [t, sh_desc, sh_bottom, sh_top])
 
-		var body := _aabb(e, [], e.EQUIPMENT_KEYWORDS)
+		var body := _aabb(e, [], EnemyModelImport.EQUIPMENT_KEYWORDS)
 		print("   cuerpo visible : Y %6.2f..%6.2f   ancho X %.2f Z %.2f" % [
 			body.position.y, body.end.y, body.size.x, body.size.z])
 		print("   desfase        : pies %+.3f   techo %+.3f   (0 = alineado)" % [
@@ -43,7 +43,7 @@ func _ready() -> void:
 		var carried: Array = []
 		var hidden := 0
 		for m in _all_meshes_including_hidden(e):
-			if not _matches(m.name.to_lower(), e.EQUIPMENT_KEYWORDS):
+			if not _matches(m.name.to_lower(), EnemyModelImport.EQUIPMENT_KEYWORDS):
 				continue
 			if m.is_visible_in_tree():
 				carried.append(m.name)
@@ -53,7 +53,7 @@ func _ready() -> void:
 			print("   equipamiento   : lleva %s  (ocultas %d del pack)" % [
 				"nada" if carried.is_empty() else ", ".join(carried), hidden])
 
-		var head := _aabb(e, e.HEAD_KEYWORDS, [])
+		var head := _aabb(e, EnemyModelImport.HEAD_KEYWORDS, [])
 		if e.head_hit_radius > 0.0:
 			var hc: Vector3 = e.head_center
 			var floor_y: float = e.head_floor_y
@@ -63,7 +63,7 @@ func _ready() -> void:
 			if head.size != Vector3.ZERO:
 				var head_names: Array = []
 				for m in _all_meshes(e):
-					if _matches(m.name.to_lower(), e.HEAD_KEYWORDS):
+					if _matches(m.name.to_lower(), EnemyModelImport.HEAD_KEYWORDS):
 						head_names.append(m.name)
 				print("   mallas cabeza  : %s" % ", ".join(head_names))
 				# Los ojos delatan hacia dónde mira la cabeza: tienen que dar a -Z

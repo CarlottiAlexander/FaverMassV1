@@ -1,11 +1,14 @@
 extends CharacterBody3D
 ## Controlador del jugador: movimiento, las 10 armas + rareza, headshot, Railgun,
 ## Éxtasis, tech de salto cohete/escopeta. Ver secciones 2-5 de la especificación.
+##
+## La geometría del disparo (a dónde apunta la mira, dispersión, de dónde nace el
+## proyectil, el haz del Railgun) vive en `ballistics.gd`; acá queda el MANEJO del
+## arma: qué está equipado, munición, cadencia, spin-up y éxtasis.
 
-const MOUSE_SENS_BASE := 1.0  # el sensible real viene de GameData.mouse_sensitivity
+const MOUSE_SENS_BASE := 1.0  # el sensible real viene de Config.mouse_sensitivity
 const STAND_CAM_Y := 0.6
 const CROUCH_CAM_Y := 0.2
-const SHOOT_RANGE := 100.0
 ## Por debajo de esto se considera que el jugador se cayó fuera del mapa.
 ## El piso vive entre Y -1 y 0, así que no hay forma de llegar acá jugando bien.
 const FALL_RESCUE_Y := -6.0
@@ -23,6 +26,7 @@ const SPINUP_DECAY_MULT := 2.5  # al soltar baja 2.5x más rápido de lo que sub
 @onready var camera: Camera3D = $Camera3D
 
 var weapon_view: Node3D
+var ballistics: Ballistics
 
 var pitch := 0.0
 var health := GameData.MAX_HEALTH
@@ -59,14 +63,16 @@ func _ready() -> void:
 	add_to_group("player")
 	GameState.state_changed.connect(_on_state_changed)
 	_on_state_changed(GameState.state)
-	weapon_view = preload("res://scripts/weapon_view.gd").new()
+	weapon_view = preload("res://scripts/features/player/weapon_view.gd").new()
 	weapon_view.player = self
 	# POV estilo Counter-Strike: arma bien pegada a la cámara, apoyada abajo a la
 	# derecha. Z corto = cerca (si se aleja, "flota" en el medio de la pantalla).
 	weapon_view.position = Vector3(0.20, -0.19, -0.28)
 	camera.add_child(weapon_view)
+	ballistics = Ballistics.new(self, camera)
+	ballistics.muzzle_source = weapon_view
 	equip_weapon("pistol", GameData.Rarity.COMMON)
-	camera.fov = GameData.fov
+	camera.fov = Config.fov
 
 func _on_state_changed(new_state: int) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if new_state == GameState.State.PLAYING else Input.MOUSE_MODE_VISIBLE
@@ -233,7 +239,8 @@ func _process_weapon(delta: float, sprinting: bool, crouching: bool) -> void:
 		for i in 3:
 			if ammo <= 0:
 				break
-			_fire_pellets(w, GameData.PISTOL_BURST_SPREAD_MULT, sprinting, crouching)
+			ballistics.fire_pellets(w, GameData.weapon_damage(w, current_rarity, spinup),
+				sprinting, crouching, _force_crit(), GameData.PISTOL_BURST_SPREAD_MULT)
 			ammo -= 1
 		ammo_changed.emit()
 		_apply_recoil_and_shake(w)
@@ -244,7 +251,7 @@ func _input(event: InputEvent) -> void:
 	if GameState.state != GameState.State.PLAYING:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var sens := GameData.mouse_sensitivity
+		var sens := Config.mouse_sensitivity
 		rotate_y(-event.relative.x * sens)
 		pitch = clamp(pitch - event.relative.y * sens, -1.4, 1.4)
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_G:
@@ -255,34 +262,10 @@ func _process_railgun(delta: float) -> void:
 	if firing:
 		railgun_beam_remaining = max(0.0, railgun_beam_remaining - delta)
 		add_shake(0.3)
-		_railgun_tick()
+		ballistics.railgun_sweep()
 		if railgun_beam_remaining <= 0.0:
 			_railgun_exhaust()
 	ammo_changed.emit()
-
-func _railgun_tick() -> void:
-	var space_state := get_world_3d().direct_space_state
-	var from := camera.global_position
-	var dir := -camera.global_transform.basis.z
-	# `exclude` de la física son RIDs, no nodos: pasarle nodos no excluye nada
-	# (funcionaba de casualidad porque un rayo que nace dentro de una forma no la
-	# reporta). Con RIDs el haz atraviesa de verdad lo que ya mató.
-	var exclude: Array[RID] = [get_rid()]
-	var origin := from
-	for i in 20:
-		var to := origin + dir * SHOOT_RANGE
-		var query := PhysicsRayQueryParameters3D.create(origin, to)
-		query.exclude = exclude
-		var result := space_state.intersect_ray(query)
-		if result.is_empty():
-			break
-		var collider = result.collider
-		if collider.is_in_group("enemy") and collider.has_method("railgun_kill"):
-			collider.railgun_kill(from)
-			exclude.append(collider.get_rid())
-			origin = result.position + dir * 0.01
-		else:
-			break
 
 func _railgun_exhaust() -> void:
 	var xp := ecstasy
@@ -314,92 +297,21 @@ func _do_shot(w: Dictionary, sprinting: bool, crouching: bool) -> void:
 	ammo_changed.emit()
 	_apply_recoil_and_shake(w)
 
+	var dmg := GameData.weapon_damage(w, current_rarity, spinup)
 	if w.get("explosive", false):
-		_fire_rocket(w)
+		ballistics.fire_rocket(w, dmg)
 	else:
-		_fire_pellets(w, 1.0, sprinting, crouching)
+		ballistics.fire_pellets(w, dmg, sprinting, crouching, _force_crit())
 
 	if ammo <= 0:
 		_auto_cycle()
 
 	_try_movement_tech()
 
-func _fire_pellets(w: Dictionary, spread_extra_mult: float, sprinting: bool, crouching: bool) -> void:
-	var spread_mult := 1.0
-	if crouching:
-		spread_mult = 0.6
-	elif sprinting:
-		spread_mult = 1.5
-	var spread: float = w["spread"] * spread_mult * spread_extra_mult
-	var pellets: int = w["pellets"]
-	# Escopeta disparada en el aire: cada perdigón pega crítico (mismo sistema
-	# que el headshot) — recompensa el salto de escopeta con daño a lo loco.
-	var force_crit := current_weapon == "shotgun" and not is_on_floor()
-	# Un solo rayo por disparo (no uno por perdigón) para saber a qué le apunta la
-	# mira; de ahí salen las direcciones de todos los perdigones.
-	var aim := _aim_point()
-	var muzzle := _muzzle_position()
-	var base := (aim - muzzle).normalized()
-	for i in pellets:
-		var dir := _spread_direction(spread, base)
-		_fire_bullet(dir, w, force_crit, muzzle)
-
-## Punto al que le apunta la MIRA. Los proyectiles salen de la boca del arma pero
-## tienen que converger acá, no volar paralelos a la vista: el caño está unos 30
-## cm a la derecha y abajo de la cámara, así que un disparo paralelo le erraría
-## por esa distancia a todo lo que esté cerca.
-func _aim_point() -> Vector3:
-	var from := camera.global_position
-	var to := from + (-camera.global_transform.basis.z) * SHOOT_RANGE
-	var q := PhysicsRayQueryParameters3D.create(from, to, 3, [get_rid()])
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
-	return hit["position"] if not hit.is_empty() else to
-
-func _muzzle_position() -> Vector3:
-	if weapon_view and is_instance_valid(weapon_view):
-		return weapon_view.get_muzzle_global()
-	return camera.global_position
-
-func _fire_bullet(dir: Vector3, w: Dictionary, force_crit: bool = false, muzzle: Vector3 = Vector3.INF) -> void:
-	var scene: PackedScene = load("res://scenes/fx/bullet.tscn")
-	var bullet = scene.instantiate()
-	get_tree().current_scene.add_child(bullet)
-	# El tracer NACE EN LA BOCA DEL ARMA, pero el barrido de colisión sigue
-	# arrancando en la cámara: si arrancara en la boca, el tramo entre la cámara y
-	# el caño sería un punto ciego y un enemigo pegado al jugador se comería los
-	# tiros. El barrido siempre puede ser más generoso que el dibujo.
-	bullet.global_position = muzzle if muzzle.is_finite() else camera.global_position + dir * 1.0
-	bullet.setup(dir, _compute_damage(w), w["hs_mult"], w.get("pierce", 0), self, force_crit, camera.global_position)
-
-func _spread_direction(spread: float, base_dir: Vector3 = Vector3.INF) -> Vector3:
-	var base := base_dir if base_dir.is_finite() else -camera.global_transform.basis.z
-	if spread <= 0.0:
-		return base
-	var right := camera.global_transform.basis.x
-	var up := camera.global_transform.basis.y
-	var ox := randf_range(-1.0, 1.0) * spread
-	var oy := randf_range(-1.0, 1.0) * spread
-	return (base + right * ox + up * oy).normalized()
-
-func _compute_damage(w: Dictionary) -> float:
-	var dmg: float = w["damage"]
-	if w.get("exp_damage", false):
-		dmg = dmg * pow(2.0, current_rarity)
-	else:
-		dmg = dmg * GameData.RARITY_DAMAGE_MULT[current_rarity]
-	if w.get("spinup", false):
-		dmg *= spinup
-	return dmg
-
-func _fire_rocket(w: Dictionary) -> void:
-	# Igual que las balas: sale de la boca y converge al punto de la mira.
-	var muzzle := _muzzle_position()
-	var dir := (_aim_point() - muzzle).normalized()
-	var scene: PackedScene = load("res://scenes/fx/rocket_projectile.tscn")
-	var rocket = scene.instantiate()
-	get_tree().current_scene.add_child(rocket)
-	rocket.global_position = muzzle
-	rocket.setup(dir, _compute_damage(w), w["hs_mult"], self, camera.global_position)
+## Escopeta disparada en el aire: cada perdigón pega crítico (mismo sistema que el
+## headshot) — recompensa el salto de escopeta con daño a lo loco.
+func _force_crit() -> bool:
+	return current_weapon == "shotgun" and not is_on_floor()
 
 func _apply_recoil_and_shake(w: Dictionary) -> void:
 	var dmg: float = w["damage"]
