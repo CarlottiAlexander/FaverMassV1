@@ -35,6 +35,9 @@ var _disabled: Dictionary = {}
 ## id -> {warnings: Array, summary: String} de la última CARGA. Sobrevive a los
 ## re-escaneos, que sólo miran nombres de archivo y no saben si el .glb se leyó.
 var _load_notes: Dictionary = {}
+## Foto de lo que había en disco la última vez que se cargó de verdad. Sirve para
+## darse cuenta de que el jugador copió, borró o apagó algo.
+var _committed_signature := ""
 
 func _ready() -> void:
 	var res := ModPaths.ensure_dir()
@@ -76,6 +79,13 @@ func scan() -> void:
 		entries.append(_scan_one(id))
 	_flag_conflicts()
 	_apply_load_notes()
+
+	# Si lo que hay en disco dejó de coincidir con lo que está cargado, queda
+	# PENDIENTE. Sin esto, copiar una carpeta con el juego abierto la mostraba en
+	# la lista pero no la cargaba nunca: sólo `set_enabled` marcaba pendiente, así
+	# que un mod nuevo se veía y no hacía nada — el peor de los dos mundos.
+	if _signature() != _committed_signature:
+		pending = true
 
 ## Vuelve a pegar lo que se supo al CARGAR (modelos que fallaron, cuántos entraron)
 ## sobre las entradas recién escaneadas.
@@ -192,7 +202,22 @@ func commit() -> void:
 	# Etapa 1 no toca stats: un reemplazo cambia el modelo y nada más. Se llama
 	# igual para dejar el registro en un estado conocido.
 	GameData.rebuild_enemy_registry({}, {}, {})
+	_committed_signature = _signature()
+	pending = false
 	mods_reloaded.emit()
+
+## Qué mods habilitados hay y qué reemplazan. Dos estados con la misma firma
+## producen exactamente el mismo juego, así que no hace falta recargar.
+func _signature() -> String:
+	var partes: Array = []
+	for e: Dictionary in entries:
+		if not e["enabled"] or not e["errors"].is_empty():
+			continue
+		var claves: Array = e["replacements"].keys()
+		claves.sort()
+		for t: String in claves:
+			partes.append("%s:%s" % [e["id"], t])
+	return "|".join(PackedStringArray(partes))
 
 ## El modelo que le corresponde a este tipo, o null si ningún mod lo pisa.
 ## Lo consulta `enemy.gd` antes de mirar en res://.
@@ -226,8 +251,7 @@ func commit_if_needed() -> void:
 	if not pending:
 		return
 	scan()
-	commit()
-	pending = false
+	commit()   # deja `pending` en false
 
 func _load_disabled() -> void:
 	_disabled.clear()

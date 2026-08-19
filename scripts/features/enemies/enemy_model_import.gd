@@ -310,17 +310,32 @@ static func _fit_head(e: Enemy, inst: Node3D) -> void:
 	# Una cabeza por debajo del centro vertical del cuerpo no es una cabeza. Ante la
 	# duda se deja `head_hit_radius` en 0, que hace caer la detección a la banda de
 	# altura de `HEADSHOT_HEIGHT_FRACTION` — menos preciso, pero nunca absurdo.
-	if centro.y <= 0.0:
-		# Una vez por TIPO, no por bicho: esto corre en cada spawn y una oleada
-		# escupe decenas del mismo enemigo — sin el filtro son 41 líneas idénticas
-		# que tapan cualquier otra cosa en el log.
+	var radio := e.head_radius * 1.5 * HEAD_HITBOX_MULT
+
+	# CONTROL DE ALCANZABILIDAD. El camino del hueso no valida nada: se fía de que
+	# el rig tenga un hueso llamado "head" y de que su pose esté donde uno espera.
+	# Con los dos packs del juego base funciona, pero un modelo cualquiera de la
+	# comunidad puede tenerlo en cualquier lado.
+	#
+	# El criterio NO es "está muy abajo" sino algo geométrico: las balas impactan en
+	# la SUPERFICIE de la forma de colisión, así que una esfera de cabeza que no
+	# asoma por encima de la silueta queda enterrada adentro del cuerpo y es
+	# IMPOSIBLE de tocar. Medido con un monstruo del banco: esfera de r=0.45 sobre
+	# una cápsula de r=0.52 centrada en el eje — `hit_test` daba cabeza 0/1 a las
+	# tres distancias, o sea headshots que nunca podían ocurrir.
+	#
+	# Si no llega arriba, se deja `head_hit_radius` en 0 y la detección cae a la
+	# banda de altura (HEADSHOT_HEIGHT_FRACTION): menos precisa, pero alcanzable —
+	# apuntarle a la cabeza visible funciona.
+	var cuerpo := body_aabb(e, inst)
+	if cuerpo.size.y > 0.01 and centro.y + radio < cuerpo.end.y * 0.8:
 		if not _warned_head.has(e.enemy_type):
 			_warned_head[e.enemy_type] = true
-			push_warning("%s: el hueso \"head\" quedó por debajo del centro del cuerpo; el headshot usa la banda de altura" % e.enemy_type)
+			push_warning("%s: el hueso \"head\" no llega a la parte alta del cuerpo; el headshot usa la banda de altura" % e.enemy_type)
 		return
 
 	e.head_center = centro
-	e.head_hit_radius = e.head_radius * 1.5 * HEAD_HITBOX_MULT
+	e.head_hit_radius = radio
 
 ## AABB del CUERPO (todo lo visible menos el equipamiento del pack), en el espacio
 ## local del enemigo.

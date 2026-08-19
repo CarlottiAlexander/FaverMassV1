@@ -73,6 +73,14 @@ func _shoot(enemy_type: String, dist: float, aim: String) -> String:
 		"head":
 			if e.head_hit_radius > 0.0:
 				target = e.to_global(e.head_center)
+			else:
+				# Sin esfera medida, el juego detecta el headshot por BANDA DE
+				# ALTURA (Enemy.HEADSHOT_HEIGHT_FRACTION). Esta rama no existía y
+				# el disparo salía al CENTRO del cuerpo: el test informaba 0/1
+				# aunque el juego anduviera bien, porque le estaba apuntando al
+				# torso. Apuntar adentro de la banda es lo único que prueba lo que
+				# el juego de verdad hace.
+				target.y += e.body_height * (Enemy.HEADSHOT_HEIGHT_FRACTION - 0.5 + 0.07)
 
 	var from := Vector3(0.0, 0.0, -1.0)
 	var dir: Vector3 = (target - from).normalized()
