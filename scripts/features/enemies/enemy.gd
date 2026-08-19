@@ -102,6 +102,11 @@ var bob_phase := 0.0
 ## Modelos KayKit: AnimationPlayer del rig importado (null si este tipo usa el
 ## modelo procedural). `current_anim_locked` marca una animación de una sola
 ## pasada (ataque/golpe) que no debe interrumpirse por la de locomoción.
+## Ajustes del pipeline de modelo declarados por un mod. Vacío = todo por defecto.
+## Lo lee `EnemyModelImport` en vez de sus constantes, que están escritas contra los
+## dos packs del juego base.
+var model_opts: Dictionary = {}
+
 var anim_player: AnimationPlayer = null
 var current_anim_locked := false
 ## Tiempo acumulado desde el último avance de animación, y desfasaje para que no
@@ -264,6 +269,11 @@ func _build_model() -> void:
 	# sino parseado del disco en runtime, pero de acá en adelante el camino es el
 	# mismo: se mide, se escala a la altura del tipo, se centra en la colisión y se
 	# le arma la esfera de headshot. Por eso "las hitboxes se acomodan solas".
+	# Ajustes que declaró el mod para este tipo (yaw, palabras de la cabeza, hueso,
+	# forma de hitbox, equipamiento, animaciones). Vacío para los 8 base, así que
+	# todo el pipeline usa sus defaults de siempre.
+	model_opts = ModManager.model_opts_of(enemy_type)
+
 	var mod_scene: PackedScene = ModManager.model_scene_for(enemy_type)
 	if mod_scene:
 		anim_player = EnemyModelImport.build_from_scene(self, mod_scene)
@@ -426,6 +436,17 @@ static func guess_anim(ap: AnimationPlayer, candidates: Array) -> String:
 				return n
 	return ""
 
+## Nombres que el mod declaró para la ranura a la que corresponden estos
+## candidatos. Vacío si no hay mod o si no declaró esa ranura.
+func _mod_anims(candidates: Array) -> Array:
+	var mapa: Dictionary = model_opts.get("anim", {})
+	if mapa.is_empty():
+		return []
+	for k: String in ANIM_HINTS:
+		if candidates == _slot_list(k):
+			return mapa.get(k if k != "hitreact" else "hit", [])
+	return []
+
 static func _slot_list(slot: String) -> Array:
 	match slot:
 		"idle": return ANIM_IDLE
@@ -442,10 +463,23 @@ func play_anim(candidates: Array, loop: bool = true, speed_scale: float = 1.0) -
 	var key := "%s|%s" % [enemy_type, candidates[0]]
 	var anim_name: String = _anim_name_cache.get(key, "")
 	if not _anim_name_cache.has(key):
-		for n in candidates:
+		# Orden de prioridad: lo que declaró el mod, después los nombres de los
+		# packs del juego, y como último recurso deducir por palabra clave.
+		#
+		# El mapa del mod va PRIMERO y se resuelve acá adentro (y no cambiando la
+		# firma de esta función) porque `EnemyBehaviors.try_melee_attack()` llama
+		# con la constante global `Enemy.ANIM_ATTACK`: si el mapa se aplicara sólo
+		# en quien llama, ese camino se lo saltearía y el ataque de un enemigo de
+		# mod usaría el nombre equivocado.
+		for n: String in _mod_anims(candidates):
 			if anim_player.has_animation(n):
 				anim_name = n
 				break
+		if anim_name == "":
+			for n in candidates:
+				if anim_player.has_animation(n):
+					anim_name = n
+					break
 		if anim_name == "":
 			anim_name = guess_anim(anim_player, candidates)
 		_anim_name_cache[key] = anim_name

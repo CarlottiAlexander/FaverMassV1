@@ -51,8 +51,21 @@ func _print_mod(e: Dictionary) -> void:
 	for w: String in e["warnings"]:
 		print("  aviso     : %s" % w)
 
-	for t: String in e["replacements"]:
-		_print_model(t, e["replacements"][t])
+	for t: String in e["types"]:
+		var d: Dictionary = e["types"][t]
+		if d.has("stats"):
+			var s: Dictionary = d["stats"]
+			var sp: Dictionary = d["spawn"]
+			var etiqueta := "reemplaza" if d.get("existia", false) else "TIPO NUEVO"
+			print("  --- %s  [%s]" % [t, etiqueta])
+			print("      %s | hp %.0f  vel %.1f  daño %.0f  alto %.2f  %s" % [
+				s.get("name", t), s.get("hp", 0.0), s.get("speed", 0.0),
+				s.get("damage", 0.0), s.get("height", 0.0),
+				"vuela" if s.get("flying", false) else "camina"])
+			print("      aparece desde la oleada %d   preset: %s" % [
+				int(sp.get("min_wave", 1)), d.get("preset", "chaser")])
+		if String(d.get("model", "")) != "":
+			_print_model(t, d["model"])
 	print("")
 
 ## Se vuelve a parsear el GLB acá a propósito, en vez de reusar lo que cacheó

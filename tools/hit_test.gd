@@ -12,7 +12,10 @@ extends Node3D
 ## Correr:  Godot --headless --path . tools/hit_test.tscn
 
 const DISTANCES := [4.0, 15.0, 40.0]
-const TYPES := ["hollow", "thrall", "dire_bat", "blood_lord", "knight", "capra", "sorceress", "demon_skull"]
+## Sale del registro y no de un array acá, para que un tipo de la comunidad se
+## pruebe con la misma vara: disparos reales contra puntos garantizados adentro de
+## su forma. Cualquier resultado que no sea 5/5 y 1/1 es un bug (salvo el Knight,
+## inmune a headshot por diseño).
 const FULL_HP := 1000000.0
 const DMG := 10.0
 const HS_MULT := 2.0
@@ -23,7 +26,7 @@ func _ready() -> void:
 	GameState.change_state(GameState.State.PLAYING)
 	await get_tree().process_frame
 
-	for t in TYPES:
+	for t in GameData.enemy_types():
 		var line := "%-12s" % t
 		for dist in DISTANCES:
 			var body_ok := 0

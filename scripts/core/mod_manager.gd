@@ -23,7 +23,8 @@ var dir_error := ""
 
 ## Una entrada por carpeta encontrada. Forma:
 ##   id, name, path, enabled, errors: Array, warnings: Array,
-##   replacements: Dictionary {enemy_type: ruta_glb}, summary: String
+##   types: Dictionary {enemy_type: {model, stats?, spawn?, color?, opts?, preset?}},
+##   summary: String, declara: bool
 var entries: Array = []
 
 ## enemy_type -> PackedScene ya parseado. Se arma una sola vez por arranque:
@@ -38,6 +39,10 @@ var _load_notes: Dictionary = {}
 ## Foto de lo que había en disco la última vez que se cargó de verdad. Sirve para
 ## darse cuenta de que el jugador copió, borró o apagó algo.
 var _committed_signature := ""
+## tipo -> ajustes del pipeline de modelo declarados por el mod.
+var _opts: Dictionary = {}
+## tipo -> preset de movimiento.
+var _presets: Dictionary = {}
 
 func _ready() -> void:
 	var res := ModPaths.ensure_dir()
@@ -108,12 +113,34 @@ func _scan_one(id: String) -> Dictionary:
 	var e := {
 		"id": id, "name": id, "path": path,
 		"enabled": not _disabled.has(id),
-		"errors": [], "warnings": [], "replacements": {}, "summary": "",
+		# `types` unifica los dos caminos: un reskin trae sólo {"model": ruta} y un
+		# tipo declarado en mod.json trae además stats/spawn/color/opts/preset. De
+		# acá para abajo nadie necesita saber de cuál de los dos vino.
+		"errors": [], "warnings": [], "types": {}, "summary": "", "declara": false,
 	}
+
+	# El mod.json manda. Si está, la carpeta `reemplazos` no se mira: tener las dos
+	# fuentes decidiendo lo mismo es pedir que se contradigan.
+	var json_path: String = path.path_join("mod.json")
+	if FileAccess.file_exists(json_path):
+		e["declara"] = true
+		var m := ModManifest.parse(json_path, path)
+		for w: String in m["warnings"]:
+			e["warnings"].append(w)
+		if not m["ok"]:
+			e["errors"].append(m["error"])
+			return e
+		if String(m["name"]) != "":
+			e["name"] = m["name"]
+		if String(m["author"]) != "":
+			e["name"] = "%s — por %s" % [e["name"], m["author"]]
+		for t: String in m["enemies"]:
+			e["types"][t] = m["enemies"][t]
+		return e
 
 	var rep_dir: String = path.path_join("reemplazos")
 	if not DirAccess.dir_exists_absolute(rep_dir):
-		e["errors"].append("no tiene carpeta \"reemplazos\"")
+		e["errors"].append("no tiene mod.json ni carpeta \"reemplazos\"")
 		return e
 
 	var d := DirAccess.open(rep_dir)
@@ -128,7 +155,7 @@ func _scan_one(id: String) -> Dictionary:
 		if not d.current_is_dir() and f.to_lower().ends_with(".glb"):
 			var etype := f.get_basename()
 			if known.has(etype):
-				e["replacements"][etype] = rep_dir.path_join(f)
+				e["types"][etype] = {"model": rep_dir.path_join(f)}
 			else:
 				# No es un error del jugador que se equivoque de nombre: es LO más
 				# fácil de equivocar. Se le dice cuáles valen.
@@ -137,7 +164,7 @@ func _scan_one(id: String) -> Dictionary:
 		f = d.get_next()
 	d.list_dir_end()
 
-	if e["replacements"].is_empty() and e["errors"].is_empty():
+	if e["types"].is_empty() and e["errors"].is_empty():
 		e["errors"].append("no encontré ningún .glb con nombre de enemigo")
 	return e
 
@@ -148,12 +175,12 @@ func _flag_conflicts() -> void:
 	for e: Dictionary in entries:
 		if not e["enabled"]:
 			continue
-		for t: String in e["replacements"]:
+		for t: String in e["types"]:
 			winner[t] = e["id"]
 	for e: Dictionary in entries:
 		if not e["enabled"]:
 			continue
-		for t: String in e["replacements"]:
+		for t: String in e["types"]:
 			if winner[t] != e["id"]:
 				e["warnings"].append("\"%s\" lo pisa el mod \"%s\"" % [t, winner[t]])
 
@@ -174,13 +201,40 @@ func commit() -> void:
 
 	_models.clear()
 	_load_notes.clear()
+	_opts.clear()
+	_presets.clear()
+	var stats_ov: Dictionary = {}
+	var spawn_ov: Dictionary = {}
+	var color_ov: Dictionary = {}
+
 	for e: Dictionary in entries:
 		if not e["enabled"] or not e["errors"].is_empty():
 			continue
 		var loaded := 0
+		var nuevos := 0
 		var notas: Array = []
-		for t: String in e["replacements"]:
-			var r := ModModelLoader.load_glb(e["replacements"][t])
+		for t: String in e["types"]:
+			var d: Dictionary = e["types"][t]
+
+			# Los datos entran ANTES que el modelo, a propósito: si el .glb falla, el
+			# tipo tiene que existir igual con sus stats y caer al cuerpo de respaldo.
+			# Al revés, un modelo roto borraría al enemigo del juego.
+			if d.has("stats"):
+				stats_ov[t] = d["stats"]
+				spawn_ov[t] = d["spawn"]
+				if d.get("declara_color", false):
+					color_ov[t] = d["color"]
+				_presets[t] = d["preset"]
+				if not d.get("existia", true):
+					nuevos += 1
+			var op: Dictionary = d.get("opts", {})
+			if not op.is_empty():
+				_opts[t] = op
+
+			var ruta := String(d.get("model", ""))
+			if ruta == "":
+				continue
+			var r := ModModelLoader.load_glb(ruta)
 			for w: String in r["warnings"]:
 				notas.append("%s: %s" % [t, w])
 			if r["error"] != "":
@@ -192,6 +246,8 @@ func commit() -> void:
 			_models[t] = r["scene"]
 			loaded += 1
 		var resumen := "%d modelo%s" % [loaded, "" if loaded == 1 else "s"]
+		if nuevos > 0:
+			resumen += ", %d enemigo%s nuevo%s" % [nuevos, "" if nuevos == 1 else "s", "" if nuevos == 1 else "s"]
 		# Se guardan aparte para que un re-escaneo (abrir la pantalla de Mods) no
 		# los pierda y el panel deje de decir la verdad.
 		_load_notes[e["id"]] = {"warnings": notas, "summary": resumen}
@@ -199,9 +255,7 @@ func commit() -> void:
 		for w: String in notas:
 			e["warnings"].append(w)
 
-	# Etapa 1 no toca stats: un reemplazo cambia el modelo y nada más. Se llama
-	# igual para dejar el registro en un estado conocido.
-	GameData.rebuild_enemy_registry({}, {}, {})
+	GameData.rebuild_enemy_registry(stats_ov, spawn_ov, color_ov)
 	_committed_signature = _signature()
 	pending = false
 	mods_reloaded.emit()
@@ -213,7 +267,7 @@ func _signature() -> String:
 	for e: Dictionary in entries:
 		if not e["enabled"] or not e["errors"].is_empty():
 			continue
-		var claves: Array = e["replacements"].keys()
+		var claves: Array = e["types"].keys()
 		claves.sort()
 		for t: String in claves:
 			partes.append("%s:%s" % [e["id"], t])
@@ -223,6 +277,17 @@ func _signature() -> String:
 ## Lo consulta `enemy.gd` antes de mirar en res://.
 func model_scene_for(enemy_type: String) -> PackedScene:
 	return _models.get(enemy_type, null)
+
+## Ajustes del pipeline de modelo que declaró el mod (yaw, palabras de la cabeza,
+## hueso, forma de la hitbox, equipamiento, animaciones). Vacío = todo por defecto,
+## que es exactamente el comportamiento de los 8 base.
+func model_opts_of(enemy_type: String) -> Dictionary:
+	return _opts.get(enemy_type, {})
+
+## Preset de movimiento, o "" si este tipo no viene de un mod. `EnemyBehaviors`
+## despacha por preset cuando hay uno, y por el `match` de siempre cuando no.
+func preset_of(enemy_type: String) -> String:
+	return _presets.get(enemy_type, "")
 
 func has_any() -> bool:
 	return not entries.is_empty()

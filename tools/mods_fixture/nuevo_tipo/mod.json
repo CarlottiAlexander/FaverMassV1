@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "name": "Aberraciones",
+  "author": "fixture",
+  "version": "1.0",
+
+  "enemies": {
+    "aberracion": {
+      "name": "Aberracion",
+      "model": "modelos/aberracion.glb",
+
+      "hp": 70, "speed": 6.5, "damage": 11, "atk_cd": 0.7,
+      "xp": 8, "regen": 1.5,
+      "radius": 0.45, "height": 1.9, "head_radius": 0.26,
+      "flying": true,
+      "color": [0.2, 0.7, 0.35],
+
+      "spawn": { "min_wave": 4, "share": 0.08, "flat": 1 },
+
+      "preset": "flyer",
+      "model_yaw": 180,
+      "hitbox": { "shape": "auto" },
+      "anim": {
+        "idle": "CharacterArmature|Flying_Idle",
+        "run": ["CharacterArmature|Fast_Flying"],
+        "attack": ["CharacterArmature|Headbutt"]
+      }
+    }
+  }
+}

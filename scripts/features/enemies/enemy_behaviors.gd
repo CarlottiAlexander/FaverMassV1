@@ -16,6 +16,14 @@ extends RefCounted
 ## Despacho por tipo. El `_` final es el mismo comportamiento que el Hollow: un
 ## tipo nuevo mal escrito camina derecho en vez de quedarse clavado.
 static func run(e: Enemy, delta: float) -> void:
+	# Un tipo que viene de un mod elige su movimiento de una lista cerrada de
+	# presets. Es una capa ADITIVA: si no hay preset (o sea, los 8 base), sigue
+	# mandando el `match` de abajo tal cual, así que el riesgo de regresión sobre
+	# el juego base es cero.
+	var preset := ModManager.preset_of(e.enemy_type)
+	if preset != "":
+		_run_preset(e, delta, preset)
+		return
 	match e.enemy_type:
 		"hollow", "thrall":
 			_direct_chase(e)
@@ -31,6 +39,25 @@ static func run(e: Enemy, delta: float) -> void:
 			_sorceress(e, delta)
 		"demon_skull":
 			_wobble_flight(e)
+		_:
+			_direct_chase(e)
+
+## Los 7 movimientos que un mod puede elegir. No se inventa ninguno: son
+## exactamente los que ya usa el juego base, expuestos por nombre.
+static func _run_preset(e: Enemy, delta: float, preset: String) -> void:
+	match preset:
+		"flyer":
+			_flying_direct(e)
+		"weaver":
+			_weave_chase(e)
+		"wobbler":
+			_wobble_flight(e)
+		"brute":
+			_knight(e, delta)
+		"stalker":
+			_capra(e, delta)
+		"orbiter":
+			_sorceress(e, delta)
 		_:
 			_direct_chase(e)
 

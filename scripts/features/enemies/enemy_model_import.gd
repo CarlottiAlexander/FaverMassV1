@@ -87,7 +87,7 @@ static func build_from_scene(e: Enemy, scene: PackedScene) -> AnimationPlayer:
 	# Los modelos miran hacia +Z, pero `look_at()` orienta el -Z del nodo hacia el
 	# objetivo. Sin este giro de 180° los enemigos caminan hacia el jugador
 	# dándole la espalda.
-	inst.rotation_degrees.y = 180.0
+	inst.rotation_degrees.y = _yaw(e)
 	e.model_root.add_child(inst)
 	_hide_extra_equipment(e, inst)
 	_swap_head(e, inst)
@@ -121,10 +121,10 @@ static func build_from_scene(e: Enemy, scene: PackedScene) -> AnimationPlayer:
 ## lo que se oculte acá ya no cuenta para nada. Lo que se deja tampoco engorda la
 ## hitbox — body_aabb() descarta el equipamiento por nombre, esté visible o no.
 static func _hide_extra_equipment(e: Enemy, inst: Node3D) -> void:
-	var keep: Array = EQUIPMENT_KEEP.get(e.enemy_type, [])
+	var keep: Array = e.model_opts.get("equip_keep", EQUIPMENT_KEEP.get(e.enemy_type, []))
 	for m in all_mesh_nodes(inst):
 		var n: String = m.name.to_lower()
-		if not name_matches(n, EQUIPMENT_KEYWORDS):
+		if not name_matches(n, _equip_hide(e)):
 			continue
 		m.visible = false
 		for k in keep:
@@ -143,6 +143,26 @@ static var _head_graft_cache: Dictionary = {}
 ## Lo llama ModManager al aplicar cambios. Este caché es ESTÁTICO: sobrevive a
 ## `reload_current_scene()`, así que sin vaciarlo un enemigo al que un mod le
 ## cambió el modelo se quedaría con el injerto medido sobre el modelo VIEJO.
+# --- Ajustes por mod -------------------------------------------------------
+# Todo lo de abajo está escrito contra los dos packs del juego base (KayKit y
+# Quaternius): qué palabras tienen las mallas de la cabeza, cómo se llama el hueso
+# del cuello, hacia dónde mira el modelo. Un modelo cualquiera de la comunidad no
+# tiene por qué respetar nada de eso, así que cada constante pasa a ser un default
+# que el `mod.json` puede pisar. Los 8 base no declaran nada, así que se comportan
+# exactamente igual que antes.
+
+static func _yaw(e: Enemy) -> float:
+	return float(e.model_opts.get("yaw", 180.0))
+
+static func _head_words(e: Enemy) -> Array:
+	return e.model_opts.get("head_keywords", HEAD_KEYWORDS)
+
+static func _head_mult(e: Enemy) -> float:
+	return float(e.model_opts.get("head_mult", HEAD_HITBOX_MULT))
+
+static func _equip_hide(e: Enemy) -> Array:
+	return e.model_opts.get("equip_hide", EQUIPMENT_KEYWORDS)
+
 static func clear_caches() -> void:
 	_head_graft_cache.clear()
 	_warned_head.clear()
@@ -259,7 +279,11 @@ static func find_bone_index(sk: Skeleton3D, bone_name: String) -> int:
 ## Ajusta la forma de colisión al volumen que el jugador realmente ve.
 static func _fit_collision(e: Enemy, box: AABB) -> void:
 	e.body_height = box.size.y
-	if box.size.x > box.size.y * WIDE_RATIO:
+	# "auto" = la regla de proporción de siempre. Un mod puede forzar la forma
+	# cuando su bicho no encaja en la heurística (una serpiente es ancha y no es
+	# una esfera; un fantasma alto y flaco puede querer esfera igual).
+	var forma := String(e.model_opts.get("shape", "auto"))
+	if forma == "sphere" or (forma == "auto" and box.size.x > box.size.y * WIDE_RATIO):
 		# Bicho ancho y chato (murciélago, cráneo volador): esfera.
 		var sph := SphereShape3D.new()
 		sph.radius = 0.5 * maxf(maxf(box.size.y, box.size.z), box.size.x * WIDE_SPAN_FACTOR)
@@ -280,21 +304,21 @@ static func _fit_collision(e: Enemy, box: AABB) -> void:
 ## nombre de malla (KayKit los nombra: *_Head, *_Helmet, *_Skull...) y si el pack
 ## no los nombra así, por el hueso "head" del rig.
 static func _fit_head(e: Enemy, inst: Node3D) -> void:
-	var box := mesh_aabb(e, inst, HEAD_KEYWORDS)
+	var box := mesh_aabb(e, inst, _head_words(e))
 	if box.size != Vector3.ZERO:
 		e.head_center = box.get_center()
-		e.head_hit_radius = 0.5 * maxf(box.size.x, maxf(box.size.y, box.size.z)) * HEAD_HITBOX_MULT
+		e.head_hit_radius = 0.5 * maxf(box.size.x, maxf(box.size.y, box.size.z)) * _head_mult(e)
 		# Techo del torso = frontera real cabeza/cuerpo de ESTE modelo. Si no hay
 		# torso (el Demon Skull es una calavera y nada más), no hay piso: todo el
 		# bicho es cabeza, que es exactamente lo que se ve.
-		var torso := mesh_aabb(e, inst, [], EQUIPMENT_KEYWORDS + HEAD_KEYWORDS)
-		if torso.size != Vector3.ZERO:
+		var torso := mesh_aabb(e, inst, [], _equip_hide(e) + _head_words(e))
+		if torso.size != Vector3.ZERO and bool(e.model_opts.get("head_torso_floor", true)):
 			e.head_floor_y = torso.end.y
 		return
 	var sk := find_skeleton(inst)
 	if not sk:
 		return
-	var idx := find_bone_index(sk, "head")
+	var idx := find_bone_index(sk, String(e.model_opts.get("head_bone", "head")))
 	if idx < 0:
 		return
 	var to_local: Transform3D = e.global_transform.affine_inverse()
@@ -310,7 +334,7 @@ static func _fit_head(e: Enemy, inst: Node3D) -> void:
 	# Una cabeza por debajo del centro vertical del cuerpo no es una cabeza. Ante la
 	# duda se deja `head_hit_radius` en 0, que hace caer la detección a la banda de
 	# altura de `HEADSHOT_HEIGHT_FRACTION` — menos preciso, pero nunca absurdo.
-	var radio := e.head_radius * 1.5 * HEAD_HITBOX_MULT
+	var radio := e.head_radius * 1.5 * _head_mult(e)
 
 	# CONTROL DE ALCANZABILIDAD. El camino del hueso no valida nada: se fía de que
 	# el rig tenga un hueso llamado "head" y de que su pose esté donde uno espera.
@@ -340,7 +364,7 @@ static func _fit_head(e: Enemy, inst: Node3D) -> void:
 ## AABB del CUERPO (todo lo visible menos el equipamiento del pack), en el espacio
 ## local del enemigo.
 static func body_aabb(e: Enemy, inst: Node3D) -> AABB:
-	return mesh_aabb(e, inst, [], EQUIPMENT_KEYWORDS)
+	return mesh_aabb(e, inst, [], _equip_hide(e))
 
 ## AABB de las mallas visibles cuyo nombre contiene alguna palabra de `include`
 ## (vacío = todas) y ninguna de `exclude`.
