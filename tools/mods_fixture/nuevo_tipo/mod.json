@@ -17,6 +17,12 @@
 
       "spawn": { "min_wave": 4, "share": 0.08, "flat": 1 },
 
+      "traits": {
+        "explode_on_death": { "radius": 7.0, "damage": 35 },
+        "shield": { "amount": 40, "regen_delay": 2.5, "regen_rate": 12 },
+        "on_hit_speed_burst": { "mult": 1.6, "time": 0.8 },
+        "no_existe_este_rasgo": {}
+      },
       "preset": "flyer",
       "model_yaw": 180,
       "hitbox": { "shape": "auto" },

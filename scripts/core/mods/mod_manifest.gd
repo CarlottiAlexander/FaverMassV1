@@ -180,11 +180,50 @@ static func _un_enemigo(tipo: String, c: Dictionary, mod_dir: String) -> Diction
 		color = Color(clampf(float(arr[0]), 0.0, 1.0), clampf(float(arr[1]), 0.0, 1.0), clampf(float(arr[2]), 0.0, 1.0))
 		declara_color = true
 
+	# --- rasgos componibles ---
+	var traits := {}
+	var tc = c.get("traits", {})
+	if typeof(tc) == TYPE_DICTIONARY:
+		for nombre: String in tc:
+			if not EnemyTraits.REGISTRO.has(nombre):
+				res["warnings"].append("\"%s\": el rasgo \"%s\" no existe (hay: %s)" % [
+					tipo, nombre, ", ".join(EnemyTraits.REGISTRO.keys())])
+				continue
+			traits[nombre] = _un_trait(tipo, nombre, tc[nombre], res)
+
 	res["data"] = {
 		"stats": stats, "spawn": spawn, "color": color, "declara_color": declara_color,
-		"model": modelo, "preset": preset, "opts": _opciones_modelo(c), "existia": existe,
+		"model": modelo, "preset": preset, "opts": _opciones_modelo(c),
+		"traits": traits, "existia": existe,
 	}
 	return res
+
+## Valida los parámetros de un rasgo contra `EnemyTraits.REGISTRO`, que es la única
+## fuente de verdad de qué acepta cada uno y entre qué valores.
+static func _un_trait(tipo: String, nombre: String, crudo, res: Dictionary) -> Dictionary:
+	var spec: Dictionary = EnemyTraits.REGISTRO[nombre]
+	var out := {}
+	# `"headshot_immune": true` es la forma natural de escribir un rasgo sin
+	# parámetros; obligar a poner `{}` sería innecesariamente ceremonioso.
+	if typeof(crudo) != TYPE_DICTIONARY:
+		return out
+	var d: Dictionary = crudo
+	for clave: String in d:
+		if not spec.has(clave):
+			res["warnings"].append("\"%s\": \"%s\" no tiene parámetro \"%s\"" % [tipo, nombre, clave])
+			continue
+		var rango = (spec[clave] as Array)[1]
+		if rango == null:
+			# Sin rango declarado: es texto o booleano, se toma tal cual.
+			out[clave] = d[clave]
+			continue
+		var v := float(d[clave])
+		var v2 := clampf(v, float((rango as Array)[0]), float((rango as Array)[1]))
+		if not is_equal_approx(v, v2):
+			res["warnings"].append("\"%s\": %s.%s=%s fuera de rango, se ajustó a %s" % [
+				tipo, nombre, clave, v, v2])
+		out[clave] = v2
+	return out
 
 ## Lo que hoy está hardcodeado contra los dos packs del juego y un modelo ajeno
 ## necesita poder pisar. Todos los defaults son el valor actual, así que un mod que

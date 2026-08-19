@@ -62,6 +62,8 @@ class Minimap extends Control:
 			var pt := Vector2(rel.x, rel.z) * scale_f
 			if pt.length() > r:
 				continue
+			if not EnemyTraits.on_minimap(e):
+				continue
 			var col: Color = GameData.enemy_color_of(e.enemy_type, Color.WHITE)
 			var dot_r := 4.0 if e.is_alpha else 2.5
 			draw_circle(Vector2(r, r) + pt, dot_r, col)

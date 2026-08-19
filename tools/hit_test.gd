@@ -103,7 +103,13 @@ func _shoot(enemy_type: String, dist: float, aim: String) -> String:
 		# Murió: sólo puede haber sido un headshot (instakill), con 1e6 de vida.
 		result = "headshot"
 	else:
-		var taken: float = FULL_HP - e.health
+		# Se cuenta la vida MÁS el escudo del trait `shield`: un enemigo escudado
+		# recibe el disparo igual, pero el escudo se come el daño y la vida no baja.
+		# Midiendo sólo la vida, un tipo con escudo daba 0/5 en cuerpo y parecía que
+		# las balas lo atravesaban — cuando en realidad el rasgo estaba andando.
+		var escudo_ini: float = float(EnemyTraits.param(e, "shield", "amount", 0.0)) if EnemyTraits.has(e, "shield") else 0.0
+		var escudo_ahora: float = float(e.trait_state.get("shield", 0.0))
+		var taken: float = (FULL_HP - e.health) + (escudo_ini - escudo_ahora)
 		if taken >= DMG * HS_MULT - 0.01:
 			result = "headshot"
 		elif taken > 0.0:

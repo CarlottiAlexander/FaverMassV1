@@ -74,10 +74,12 @@ func spawn_damage_number(pos: Vector3, amount: float, is_headshot: bool) -> void
 
 ## `radius` es el de DAÑO; `visual_radius` el de la animación. Son distintos a
 ## propósito — ver GameData.ROCKET_EXPLOSION_RADIUS.
-func spawn_explosion(pos: Vector3, radius: float, visual_radius: float = -1.0) -> void:
+## `dmg_centro` < 0 = el daño del cohete. `objetivo`: "enemies" o "player".
+func spawn_explosion(pos: Vector3, radius: float, visual_radius: float = -1.0,
+		dmg_centro: float = -1.0, objetivo: String = "enemies") -> void:
 	if not _container():
 		return
 	var e := explosion_scene.instantiate()
 	_container().add_child(e)
 	e.global_position = pos
-	e.call_deferred("detonate", radius, visual_radius if visual_radius > 0.0 else radius)
+	e.call_deferred("detonate", radius, visual_radius if visual_radius > 0.0 else radius, dmg_centro, objetivo)

@@ -102,6 +102,13 @@ var bob_phase := 0.0
 ## Modelos KayKit: AnimationPlayer del rig importado (null si este tipo usa el
 ## modelo procedural). `current_anim_locked` marca una animación de una sola
 ## pasada (ataque/golpe) que no debe interrumpirse por la de locomoción.
+## Rasgos declarados por un mod: {nombre: {parámetros}}. Vacío para los 8 base.
+var traits: Dictionary = {}
+## Estado en vivo de esos rasgos (escudo restante, ráfaga activa...). Va todo acá
+## y no como campos nuevos del enemigo: cada trait sumaría 2-3 campos a los 50
+## enemigos vivos, y el 90% de ellos no lo usaría.
+var trait_state: Dictionary = {}
+
 ## Ajustes del pipeline de modelo declarados por un mod. Vacío = todo por defecto.
 ## Lo lee `EnemyModelImport` en vez de sus constantes, que están escritas contra los
 ## dos packs del juego base.
@@ -188,6 +195,11 @@ func _ready() -> void:
 	var players := get_tree().get_nodes_in_group("player")
 	if players.size() > 0:
 		player = players[0]
+
+	# Los rasgos se resuelven antes que nada: `EnemyTraits.on_spawn` los inicializa
+	# (el escudo arranca cargado) y varios se consultan durante el armado.
+	traits = ModManager.traits_of(enemy_type)
+	EnemyTraits.on_spawn(self)
 
 	var stats: Dictionary = GameData.enemy_stats_of(enemy_type)
 	max_health = stats["hp"]
@@ -324,8 +336,12 @@ func _setup_anim_player() -> void:
 ## desaparecer. Va después del injerto de cabeza para alcanzarlo también.
 func _apply_render_cull() -> void:
 	var meshes := EnemyModelImport.all_mesh_nodes(self)
+	# El trait `cloak` es, literalmente, un corte de dibujado más cercano: el
+	# enemigo no se ve hasta que entrás en su distancia de revelado. Lo resuelve el
+	# RenderingServer igual que el LOD, así que no cuesta un solo frame de GDScript.
+	var corte := EnemyTraits.cull_distance(self, GameData.ENEMY_LOD_DISTANCE)
 	for m in meshes:
-		m.visibility_range_end = GameData.ENEMY_LOD_DISTANCE
+		m.visibility_range_end = corte
 		m.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
 	# El aura del alpha queda AFUERA del destello: es su marca de identidad y
 	# pintarla de rojo la borraría justo cuando más se le está disparando.
@@ -613,6 +629,7 @@ func _physics_process(delta: float) -> void:
 		_react_cd -= delta
 	if _slow_time > 0.0:
 		_slow_time -= delta
+	EnemyTraits.tick(self, delta)
 
 	if thrown:
 		EnemyBehaviors.process_thrown(self, delta)
@@ -633,6 +650,14 @@ func _physics_process(delta: float) -> void:
 	if _slow_time > 0.0:
 		velocity.x *= HIT_SLOW_FACTOR
 		velocity.z *= HIT_SLOW_FACTOR
+
+	# El trait `on_hit_speed_burst` va DESPUÉS del frenón, a propósito: un enemigo
+	# que acelera al recibir daño tiene que ganarle al frenón que acaba de comerse,
+	# si no la mecánica se cancela sola y no se nota.
+	var tm := EnemyTraits.speed_mult(self)
+	if tm != 1.0:
+		velocity.x *= tm
+		velocity.z *= tm
 
 	_resolve_separation(delta)
 
@@ -767,7 +792,7 @@ func is_headshot_hit(hit_pos: Vector3) -> bool:
 	return frac >= HEADSHOT_HEIGHT_FRACTION
 
 func is_headshot_immune() -> bool:
-	return enemy_type == "knight" or is_alpha
+	return enemy_type == "knight" or is_alpha or EnemyTraits.has(self, "headshot_immune")
 
 func take_damage(amount: float, is_headshot: bool = false, hit_from: Vector3 = Vector3.ZERO) -> void:
 	if dead:
@@ -775,7 +800,9 @@ func take_damage(amount: float, is_headshot: bool = false, hit_from: Vector3 = V
 	if is_headshot and not is_headshot_immune():
 		health = 0.0
 	else:
-		health -= amount
+		# El escudo del trait `shield` se come el daño ANTES que la vida. Un
+		# headshot lo saltea, igual que saltea la vida: sigue siendo instakill.
+		health -= EnemyTraits.absorb(self, amount)
 	if health <= 0.0:
 		_die(is_headshot, hit_from)
 		return
@@ -790,6 +817,7 @@ func _react_to_hit() -> void:
 		return
 	_react_cd = HIT_REACT_COOLDOWN
 	_slow_time = HIT_SLOW_TIME
+	EnemyTraits.on_hit(self)
 	if _flash_time <= 0.0:
 		_set_flash(true)
 	_flash_time = HIT_FLASH_TIME
@@ -837,6 +865,9 @@ func _die(is_headshot: bool, hit_from: Vector3) -> void:
 	FxManager.spawn_gibs(global_position, from_dir, body_radius, is_alpha, is_headshot)
 	if enemy_type == "blood_lord":
 		_spawn_bats_on_death()
+	# Va antes del queue_free(): los traits que invocan o explotan necesitan la
+	# posición del enemigo y el árbol todavía vivo.
+	EnemyTraits.on_death(self)
 	died.emit(global_position, from_dir, is_headshot)
 	queue_free()
 

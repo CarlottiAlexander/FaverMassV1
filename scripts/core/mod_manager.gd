@@ -43,6 +43,8 @@ var _committed_signature := ""
 var _opts: Dictionary = {}
 ## tipo -> preset de movimiento.
 var _presets: Dictionary = {}
+## tipo -> rasgos componibles.
+var _traits: Dictionary = {}
 
 func _ready() -> void:
 	var res := ModPaths.ensure_dir()
@@ -203,6 +205,7 @@ func commit() -> void:
 	_load_notes.clear()
 	_opts.clear()
 	_presets.clear()
+	_traits.clear()
 	var stats_ov: Dictionary = {}
 	var spawn_ov: Dictionary = {}
 	var color_ov: Dictionary = {}
@@ -225,6 +228,8 @@ func commit() -> void:
 				if d.get("declara_color", false):
 					color_ov[t] = d["color"]
 				_presets[t] = d["preset"]
+				if d.has("traits"):
+					_traits[t] = d["traits"]
 				if not d.get("existia", true):
 					nuevos += 1
 			var op: Dictionary = d.get("opts", {})
@@ -288,6 +293,10 @@ func model_opts_of(enemy_type: String) -> Dictionary:
 ## despacha por preset cuando hay uno, y por el `match` de siempre cuando no.
 func preset_of(enemy_type: String) -> String:
 	return _presets.get(enemy_type, "")
+
+## Rasgos declarados para este tipo: {nombre: {parámetros}}. Vacío para los 8 base.
+func traits_of(enemy_type: String) -> Dictionary:
+	return _traits.get(enemy_type, {})
 
 func has_any() -> bool:
 	return not entries.is_empty()

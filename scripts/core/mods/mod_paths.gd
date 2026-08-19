@@ -93,7 +93,29 @@ COMO SE COMPORTA ("preset") — uno de estos siete:
     stalker    se queda quieto hasta que lo miras, despues carga y salta
     orbiter    se acerca y orbita alrededor tuyo
 
-No se puede escribir comportamiento propio: los mods NO ejecutan codigo.
+RASGOS ("traits") — se pueden combinar todos los que quieras
+    "traits": {
+      "explode_on_death":   { "radius": 8.0, "damage": 40 },
+      "shield":             { "amount": 50, "regen_delay": 3.0, "regen_rate": 10 },
+      "on_hit_speed_burst": { "mult": 1.5, "time": 1.0 },
+      "summon_on_death":    { "type": "dire_bat", "count": 2, "spread": 0.6 },
+      "cloak":              { "reveal_distance": 12.0, "hide_on_minimap": false },
+      "headshot_immune":    {}
+    }
+
+    explode_on_death    explota al morir. Le pega AL JUGADOR, no a los otros
+                        enemigos (si no, una oleada de estos se mata sola).
+    shield              absorbe dano antes que la vida y se recarga si lo
+                        dejas tranquilo. Un headshot lo saltea igual.
+    on_hit_speed_burst  se acelera cuando lo golpeas, en vez de frenarse.
+    summon_on_death     invoca otros enemigos al morir. Lo invocado NO cuenta
+                        para terminar la oleada.
+    cloak               invisible hasta que te acercas.
+    headshot_immune     no muere de un headshot.
+
+No se puede escribir comportamiento propio: los mods NO ejecutan codigo. Si
+necesitas logica condicional ("si el jugador esta bajo de vida, huye"), jefes
+multifase o armas nuevas, eso hoy no se puede.
 
 SI TU MODELO NO SE VE BIEN
 --------------------------

@@ -16,20 +16,36 @@ var flash: OmniLight3D
 
 ## `radius` es el área de DAÑO; `visual_radius` el tamaño de la animación. No son
 ## el mismo número: ver GameData.ROCKET_EXPLOSION_RADIUS.
-func detonate(radius: float, visual_radius: float = -1.0) -> void:
+## `dmg_centro` < 0 usa el daño del cohete, que es el caso de siempre. `objetivo`
+## es "enemies" (el cohete del jugador) o "player" (un enemigo que explota al
+## morir, ver el trait `explode_on_death`).
+##
+## Un enemigo explosivo NO le pega a los otros enemigos a propósito: una oleada de
+## bichos explosivos se mataría sola en cadena y el jugador miraría.
+func detonate(radius: float, visual_radius: float = -1.0, dmg_centro: float = -1.0, objetivo: String = "enemies") -> void:
 	if visual_radius <= 0.0:
 		visual_radius = radius
 
 	# --- daño en área, con caída lineal desde el centro ---
-	for e in get_tree().get_nodes_in_group("enemy"):
-		if not is_instance_valid(e) or not e.has_method("take_damage"):
-			continue
-		var dist: float = e.global_position.distance_to(global_position)
-		if dist > radius:
-			continue
-		var falloff: float = max(0.0, 1.0 - dist / radius)
-		var dmg: float = GameData.WEAPONS["rocket"]["damage"] * GameData.ROCKET_CENTER_DAMAGE_MULT * falloff
-		e.take_damage(dmg, false, global_position)
+	var base: float = dmg_centro
+	if base < 0.0:
+		base = GameData.WEAPONS["rocket"]["damage"] * GameData.ROCKET_CENTER_DAMAGE_MULT
+
+	if objetivo == "player":
+		var p := get_tree().get_first_node_in_group("player")
+		if p and p.has_method("take_damage"):
+			var d: float = p.global_position.distance_to(global_position)
+			if d <= radius:
+				p.take_damage(base * maxf(0.0, 1.0 - d / radius), global_position)
+	else:
+		for e in get_tree().get_nodes_in_group("enemy"):
+			if not is_instance_valid(e) or not e.has_method("take_damage"):
+				continue
+			var dist: float = e.global_position.distance_to(global_position)
+			if dist > radius:
+				continue
+			var falloff: float = max(0.0, 1.0 - dist / radius)
+			e.take_damage(base * falloff, false, global_position)
 
 	# --- feedback visual ---
 	# IMPORTANTE: duplicar los materiales. Vienen del .tscn como sub-recursos

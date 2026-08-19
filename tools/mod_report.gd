@@ -64,6 +64,13 @@ func _print_mod(e: Dictionary) -> void:
 				"vuela" if s.get("flying", false) else "camina"])
 			print("      aparece desde la oleada %d   preset: %s" % [
 				int(sp.get("min_wave", 1)), d.get("preset", "chaser")])
+			var tr: Dictionary = d.get("traits", {})
+			if not tr.is_empty():
+				var partes: Array = []
+				for n: String in tr:
+					var ps: Dictionary = tr[n]
+					partes.append(n if ps.is_empty() else "%s(%s)" % [n, ", ".join(PackedStringArray(ps.keys()))])
+				print("      rasgos: %s" % ", ".join(PackedStringArray(partes)))
 		if String(d.get("model", "")) != "":
 			_print_model(t, d["model"])
 	print("")
