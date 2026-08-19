@@ -20,3 +20,7 @@ build/
 
 # Notas internas de desarrollo (contexto de trabajo, no documentacion del proyecto)
 CLAUDE.md
+
+# Carpeta de mods del jugador. La crea el juego solo al arrancar y su
+# contenido es del usuario, no del proyecto.
+/mods/

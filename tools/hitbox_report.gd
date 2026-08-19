@@ -6,12 +6,16 @@ extends Node
 ##
 ## Correr:  Godot --headless --path . tools/hitbox_report.tscn
 
-const TYPES := ["hollow", "thrall", "dire_bat", "blood_lord", "knight", "capra", "sorceress", "demon_skull"]
+## La lista sale del registro, no de un array acá: así un tipo que agregue un mod
+## queda validado con exactamente la misma vara que los 8 base — desfase entre
+## colisión y modelo, esfera de headshot, y hacia dónde miran los ojos (que es lo
+## que delata un modelo puesto al revés sin tener que mirar la pantalla).
+##   Godot --headless --path . tools/hitbox_report.tscn -- --mods=tools/mods_fixture
 
 func _ready() -> void:
 	await get_tree().process_frame
 	var scene: PackedScene = load("res://scenes/enemy.tscn")
-	for t in TYPES:
+	for t in GameData.enemy_types():
 		var e = scene.instantiate()
 		e.enemy_type = t
 		add_child(e)

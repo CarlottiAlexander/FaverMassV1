@@ -16,6 +16,10 @@ var sfx_volume := 1.0
 var mouse_sensitivity := 0.002
 var fov := 90.0
 var fullscreen := false
+## Ids de mods que el jugador APAGÓ. Se guardan los apagados y no los prendidos a
+## propósito: así un mod recién copiado a la carpeta arranca habilitado, sin que
+## haya que entrar al menú a prenderlo. La lista es sólo de excepciones.
+var mods_disabled: Array = []
 
 func _ready() -> void:
 	load_config()
@@ -37,6 +41,15 @@ func load_config() -> void:
 			"mouse_sensitivity": mouse_sensitivity = clampf(value.to_float(), 0.0005, 0.01)
 			"fov": fov = clampf(value.to_float(), FOV_MIN, FOV_MAX)
 			"fullscreen": fullscreen = value == "true"
+			# Lista separada por comas. Un id vacío ensuciaría el filtro, así que
+			# se descartan; y si la clave no está, la lista queda vacía = todo
+			# habilitado, que es el estado correcto para una instalación nueva.
+			"mods_disabled":
+				mods_disabled = []
+				for part in value.split(",", false):
+					var id := String(part).strip_edges()
+					if id != "":
+						mods_disabled.append(id)
 			_: pass  # claves desconocidas se ignoran
 
 func save_config() -> void:
@@ -46,6 +59,7 @@ func save_config() -> void:
 	f.store_line("mouse_sensitivity=%s" % mouse_sensitivity)
 	f.store_line("fov=%s" % fov)
 	f.store_line("fullscreen=%s" % ("true" if fullscreen else "false"))
+	f.store_line("mods_disabled=%s" % ",".join(PackedStringArray(mods_disabled)))
 
 func apply_fullscreen() -> void:
 	DisplayServer.window_set_mode(

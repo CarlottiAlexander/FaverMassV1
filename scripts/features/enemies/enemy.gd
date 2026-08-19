@@ -260,6 +260,20 @@ func _build_model() -> void:
 	# colisión (ver EnemyModelImport.build); el procedural no, así que hay que
 	# bajarlo a mano: sus piezas se ubican asumiendo Y=0 -> pies, pero el origen
 	# del CharacterBody3D es el CENTRO de la cápsula.
+	# Un mod tiene prioridad sobre el asset del juego. Su modelo no vino de res://
+	# sino parseado del disco en runtime, pero de acá en adelante el camino es el
+	# mismo: se mide, se escala a la altura del tipo, se centra en la colisión y se
+	# le arma la esfera de headshot. Por eso "las hitboxes se acomodan solas".
+	var mod_scene: PackedScene = ModManager.model_scene_for(enemy_type)
+	if mod_scene:
+		anim_player = EnemyModelImport.build_from_scene(self, mod_scene)
+		if anim_player or model_root.get_child_count() > 0:
+			_setup_anim_player()
+			_apply_render_cull()
+			return
+		# El modelo del mod no se pudo montar: se sigue de largo al asset base en
+		# vez de dejar al enemigo invisible.
+
 	var model_path := "res://assets/enemies/%s.glb" % enemy_type
 	if ResourceLoader.exists(model_path):
 		anim_player = EnemyModelImport.build(self, model_path)
@@ -344,6 +358,12 @@ const ANIM_HIT := [
 ## frame que siempre dan el mismo resultado.
 static var _anim_name_cache: Dictionary = {}
 
+## Lo llama ModManager al aplicar cambios. Igual que el caché de injertos: es
+## estático y sobrevive al reinicio de escena, así que un modelo nuevo con otros
+## nombres de animación se quedaría con los resueltos para el modelo anterior.
+static func clear_anim_cache() -> void:
+	_anim_name_cache.clear()
+
 ## Ranking de cercanía al jugador, reconstruido UNA vez por frame y compartido.
 ## Mismo patrón que la grilla de separación: guarda con el número de frame.
 static var _anim_rank: Dictionary = {}
@@ -363,6 +383,58 @@ func _rebuild_anim_ranks() -> void:
 	for i in visibles.size():
 		_anim_rank[visibles[i].get_instance_id()] = i
 
+## Palabras que identifican cada ranura cuando el nombre exacto no está en la
+## lista de candidatos. El orden importa: se prueba palabra por palabra y gana la
+## primera que aparezca en alguna animación del modelo.
+const ANIM_HINTS := {
+	"idle": ["idle", "stand", "breath"],
+	"run": ["run", "walk", "fly", "move"],
+	"attack": ["attack", "punch", "bite", "headbutt", "hit", "slash", "chop"],
+	"death": ["death", "die", "dead"],
+	"hitreact": ["hitreact", "hitrecieve", "hitreceive", "damage", "flinch"],
+}
+
+## Último recurso cuando ninguno de los nombres candidatos existe en el modelo.
+##
+## Hace falta de verdad, no es un lujo: las listas de candidatos están escritas
+## contra los dos packs que usa el juego, y un modelo cualquiera de la comunidad
+## nombra sus animaciones como se le ocurrió al autor. Medido con un monstruo del
+## banco: trae `CharacterArmature|Idle` y `|Walk`, y las listas buscaban
+## `|Flying_Idle` y `|Fast_Flying` — no resolvía NINGUNA ranura, o sea que el
+## enemigo se deslizaba sin animarse. Con esto, la mayoría de los rigs andan sin
+## que el modder configure nada.
+## Estática y recibiendo el AnimationPlayer para que `tools/mod_report` pueda
+## reportar EXACTAMENTE lo que el juego va a resolver. Un reporte que dijera algo
+## distinto de lo que pasa en la partida sería peor que no tener reporte.
+static func guess_anim(ap: AnimationPlayer, candidates: Array) -> String:
+	var slot := ""
+	for k: String in ANIM_HINTS:
+		if candidates == _slot_list(k):
+			slot = k
+			break
+	if slot == "":
+		return ""
+	var names := ap.get_animation_list()
+	for hint: String in ANIM_HINTS[slot]:
+		for n: String in names:
+			# Se compara sobre el nombre PELADO: los packs prefijan con el nombre
+			# del armature ("CharacterArmature|Idle"), y buscar "idle" adentro del
+			# nombre completo daría falsos positivos con cualquier armature que se
+			# llame así.
+			var bare := n.get_slice("|", n.get_slice_count("|") - 1).to_lower()
+			if bare.contains(hint):
+				return n
+	return ""
+
+static func _slot_list(slot: String) -> Array:
+	match slot:
+		"idle": return ANIM_IDLE
+		"run": return ANIM_RUN
+		"attack": return ANIM_ATTACK
+		"death": return ANIM_DEATH
+		"hitreact": return ANIM_HIT
+	return []
+
 ## Público: lo llama también `EnemyBehaviors.try_melee_attack()`.
 func play_anim(candidates: Array, loop: bool = true, speed_scale: float = 1.0) -> bool:
 	if not anim_player:
@@ -374,6 +446,8 @@ func play_anim(candidates: Array, loop: bool = true, speed_scale: float = 1.0) -
 			if anim_player.has_animation(n):
 				anim_name = n
 				break
+		if anim_name == "":
+			anim_name = guess_anim(anim_player, candidates)
 		_anim_name_cache[key] = anim_name
 	if anim_name == "":
 		return false

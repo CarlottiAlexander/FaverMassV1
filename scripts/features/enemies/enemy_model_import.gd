@@ -67,7 +67,23 @@ static func build(e: Enemy, path: String) -> AnimationPlayer:
 	var scene: PackedScene = load(path)
 	if not scene:
 		return null
-	var inst: Node3D = scene.instantiate()
+	return build_from_scene(e, scene)
+
+## Igual que `build()` pero recibe la escena ya cargada. Existe porque los modelos
+## de la comunidad NO vienen de `res://`: se parsean del disco en tiempo de
+## ejecución (ver ModModelLoader) y nunca pasan por `load()`. Todo lo que sigue
+## —medir, escalar, centrar, ajustar cápsula y cabeza— es idéntico venga de donde
+## venga el modelo, que es justamente lo que hace que un .glb ajeno funcione solo.
+static func build_from_scene(e: Enemy, scene: PackedScene) -> AnimationPlayer:
+	if not scene:
+		return null
+	var inst_any: Node = scene.instantiate()
+	if not (inst_any is Node3D):
+		# Un GLTF cuya raíz no es 3D no se puede colgar del enemigo. Devolver null
+		# hace que `enemy.gd` caiga al modelo procedural en vez de quedar invisible.
+		inst_any.free()
+		return null
+	var inst: Node3D = inst_any
 	# Los modelos miran hacia +Z, pero `look_at()` orienta el -Z del nodo hacia el
 	# objetivo. Sin este giro de 180° los enemigos caminan hacia el jugador
 	# dándole la espalda.
@@ -123,6 +139,17 @@ static func _hide_extra_equipment(e: Enemy, inst: Node3D) -> void:
 ## La transformada es la misma para todas las instancias de un tipo: al momento
 ## del injerto el rig está en pose de reposo, igual en todas.
 static var _head_graft_cache: Dictionary = {}
+
+## Lo llama ModManager al aplicar cambios. Este caché es ESTÁTICO: sobrevive a
+## `reload_current_scene()`, así que sin vaciarlo un enemigo al que un mod le
+## cambió el modelo se quedaría con el injerto medido sobre el modelo VIEJO.
+static func clear_caches() -> void:
+	_head_graft_cache.clear()
+	_warned_head.clear()
+
+## Tipos a los que ya se les avisó que su hueso de cabeza no sirve. Sólo para no
+## repetir el mismo aviso en cada spawn.
+static var _warned_head: Dictionary = {}
 
 ## Le saca la cabeza al modelo y le injerta la de otro GLB (ver HEAD_SWAP).
 ##
@@ -271,7 +298,28 @@ static func _fit_head(e: Enemy, inst: Node3D) -> void:
 	if idx < 0:
 		return
 	var to_local: Transform3D = e.global_transform.affine_inverse()
-	e.head_center = (to_local * sk.global_transform * sk.get_bone_global_pose(idx)).origin
+	var centro := (to_local * sk.global_transform * sk.get_bone_global_pose(idx)).origin
+
+	# CONTROL DE SENSATEZ. El camino del hueso no valida nada: se fía de que el rig
+	# tenga un hueso llamado "head" y de que su pose esté donde uno espera. Con los
+	# dos packs del juego base funciona, pero un modelo cualquiera de la comunidad
+	# puede tener el hueso nombrado igual y puesto en cualquier lado — medido con un
+	# monstruo del banco, la esfera caía en Y=-0.54, o sea en las patas: se le
+	# disparaba a las piernas y contaba como headshot instakill.
+	#
+	# Una cabeza por debajo del centro vertical del cuerpo no es una cabeza. Ante la
+	# duda se deja `head_hit_radius` en 0, que hace caer la detección a la banda de
+	# altura de `HEADSHOT_HEIGHT_FRACTION` — menos preciso, pero nunca absurdo.
+	if centro.y <= 0.0:
+		# Una vez por TIPO, no por bicho: esto corre en cada spawn y una oleada
+		# escupe decenas del mismo enemigo — sin el filtro son 41 líneas idénticas
+		# que tapan cualquier otra cosa en el log.
+		if not _warned_head.has(e.enemy_type):
+			_warned_head[e.enemy_type] = true
+			push_warning("%s: el hueso \"head\" quedó por debajo del centro del cuerpo; el headshot usa la banda de altura" % e.enemy_type)
+		return
+
+	e.head_center = centro
 	e.head_hit_radius = e.head_radius * 1.5 * HEAD_HITBOX_MULT
 
 ## AABB del CUERPO (todo lo visible menos el equipamiento del pack), en el espacio

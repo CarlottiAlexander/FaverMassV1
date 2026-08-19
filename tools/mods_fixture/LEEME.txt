@@ -1,0 +1,51 @@
+CARPETA DE MODS DE FAVER MASS
+=============================
+
+Todo lo que pongas acá adentro lo carga el juego al arrancar.
+
+CAMBIAR EL MODELO DE UN ENEMIGO
+-------------------------------
+Crea una carpeta con el nombre que quieras y adentro otra llamada
+"reemplazos". Pone ahi un .glb con el nombre del enemigo:
+
+    mods/
+      mi_pack/
+        reemplazos/
+          hollow.glb
+
+Los nombres de enemigo que existen hoy son:
+
+    hollow        thrall        dire_bat      blood_lord
+    knight        capra         sorceress     demon_skull
+
+El tamano y la hitbox se ajustan SOLOS al modelo nuevo: el juego mide el
+modelo, lo escala a la altura que le corresponde a ese enemigo, lo centra
+en su colision, y arma la esfera de la cabeza para los headshots. No hay
+ningun numero que configurar.
+
+Lo que NO cambia es el comportamiento: si reemplazas al Hollow, tu bicho
+va a perseguirte igual que un Hollow. Es un cambio de piel.
+
+QUE PASA SI ALGO SALE MAL
+-------------------------
+Nada grave. Un archivo roto o un modelo que el juego no puede leer se
+descarta solo: se sigue jugando con el modelo original y el menu de Mods
+te muestra que fallo y por que. Un mod malo nunca impide que el juego
+arranque.
+
+COSAS A TENER EN CUENTA
+-----------------------
+- Formato .glb (binario). El .gltf suelto con archivos al lado no sirve.
+- Si tu modelo trae la textura en un archivo aparte, ponela al lado del
+  .glb respetando la ruta que el modelo espera.
+- Tope de 64 MB por archivo. Los modelos de la comunidad se cargan sin
+  pasar por el importador de Godot, asi que no tienen LOD ni texturas
+  comprimidas: uno muy pesado se nota en el rendimiento.
+- Si tu modelo camina de espaldas, esta mirando para el otro lado. Por
+  ahora la unica solucion es girarlo en tu programa de 3D y exportarlo
+  de nuevo (mas adelante va a poder configurarse desde un archivo).
+
+SEGURIDAD
+---------
+Los mods NO ejecutan codigo: son modelos y datos, nada mas. Aun asi,
+segui bajando cosas solo de gente en la que confies.
