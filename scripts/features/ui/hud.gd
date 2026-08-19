@@ -317,9 +317,8 @@ func on_wave_announced(wave: int) -> void:
 	wave_announce_timer = 2.0
 
 func on_kill_feed(enemy_type: String, is_headshot: bool, is_alpha: bool) -> void:
-	var stats: Dictionary = GameData.ENEMY_STATS.get(enemy_type, {})
-	var ename: String = stats.get("name", enemy_type)
-	var txt := ename
+	# Un tipo sin nombre declarado muestra su propio id, no el de otro enemigo.
+	var txt := GameData.enemy_name_of(enemy_type)
 	if is_alpha:
 		txt = "ALPHA " + txt
 	if is_headshot:

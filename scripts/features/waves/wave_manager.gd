@@ -86,11 +86,12 @@ func _spawn_next() -> void:
 		is_alpha = true
 		first_alpha_assigned = true
 
-	var dist_min := 40.0
-	var dist_max := 50.0
-	if etype == "capra":
-		dist_min = 46.0
-		dist_max = 58.0
+	# A qué distancia nace sale de la tabla de spawn, no de un `if` por nombre: la
+	# Capra necesita 46-58 porque carga a 8 u/s y a 40 m no daba tiempo a reaccionar,
+	# y un tipo de mod igual de rápido va a necesitar lo mismo.
+	var sd: Array = GameData.spawn_dist_of(etype)
+	var dist_min: float = sd[0]
+	var dist_max: float = sd[1]
 
 	var angle: float
 	if randf() < 0.7:
@@ -128,7 +129,7 @@ func _spawn_next() -> void:
 			pos.x = flat.x
 			pos.z = flat.y
 
-	pos.y = randf_range(2.0, 5.0) if GameData.ENEMY_STATS[etype]["flying"] else 0.3
+	pos.y = randf_range(2.0, 5.0) if GameData.enemy_stats_of(etype).get("flying", false) else 0.3
 
 	var e = enemy_scene.instantiate()
 	e.enemy_type = etype
@@ -139,7 +140,7 @@ func _spawn_next() -> void:
 	# enterrado hasta el pecho y salía a los tirones cuando la física lo
 	# despenetraba. `body_height` ya viene ajustado al modelo real por su _ready(),
 	# que corrió recién en el add_child de arriba, y contempla el tamaño alpha.
-	if not GameData.ENEMY_STATS[etype]["flying"]:
+	if not GameData.enemy_stats_of(etype).get("flying", false):
 		pos.y = e.body_height * 0.5 + 0.05
 	e.global_position = pos
 	alive_count += 1

@@ -1,7 +1,8 @@
 class_name Enemy
 extends CharacterBody3D
 ## Enemigo unificado: 8 tipos (sección 6) + variante alpha, seleccionados por `enemy_type`.
-## Las stats base vienen de GameData.ENEMY_STATS.
+## Las stats base vienen del registro de GameData (`enemy_stats_of`), que es
+## ENEMY_STATS mas lo que hayan pisado los mods.
 ##
 ## Este archivo es el NÚCLEO: estado, medidas, animación, visibilidad, separación,
 ## daño y muerte. Lo que varía por tipo vive en tres módulos al lado, cada uno con
@@ -183,7 +184,7 @@ func _ready() -> void:
 	if players.size() > 0:
 		player = players[0]
 
-	var stats: Dictionary = GameData.ENEMY_STATS.get(enemy_type, GameData.ENEMY_STATS["hollow"])
+	var stats: Dictionary = GameData.enemy_stats_of(enemy_type)
 	max_health = stats["hp"]
 	speed = stats["speed"]
 	damage = stats["damage"]
@@ -247,7 +248,7 @@ func _apply_collision() -> void:
 # --- modelo -----------------------------------------------------------------
 
 func _color() -> Color:
-	return GameData.ENEMY_COLOR.get(enemy_type, Color(0.5, 0.1, 0.1))
+	return GameData.enemy_color_of(enemy_type)
 
 func _build_model() -> void:
 	model_root = Node3D.new()

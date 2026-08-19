@@ -133,7 +133,7 @@ func _spawn_fixed_mix() -> void:
 			get_tree().current_scene.add_child(e)
 			var a := rng.randf() * TAU
 			var d := rng.randf_range(8.0, 44.0)
-			var y: float = rng.randf_range(2.0, 5.0) if GameData.ENEMY_STATS[etype]["flying"] else e.body_height * 0.5 + 0.05
+			var y: float = rng.randf_range(2.0, 5.0) if GameData.enemy_stats_of(etype).get("flying", false) else e.body_height * 0.5 + 0.05
 			e.global_position = Vector3(sin(a) * d, y, cos(a) * d)
 			# Diagnóstico: acá nadie dispara, así que TODA baja es sospechosa.
 			# `_die()` cuenta en GameState.run_kills; la red de FALL_KILL_Y no.

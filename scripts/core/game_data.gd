@@ -130,25 +130,25 @@ const ROCKET_CENTER_DAMAGE_MULT := 0.7
 # --- 6. Enemigos ---
 const ENEMY_STATS := {
 	"hollow": {"name": "Hollow", "hp": 100.0, "speed": 3.8, "damage": 10.0, "atk_cd": 1.0,
-		"min_wave": 1, "xp": 5, "regen": 2.0, "radius": 0.52, "height": 2.35, "head_radius": 0.30, "flying": false},
+		"xp": 5, "regen": 2.0, "radius": 0.52, "height": 2.35, "head_radius": 0.30, "flying": false},
 	"thrall": {"name": "Thrall", "hp": 50.0, "speed": 7.5, "damage": 8.0, "atk_cd": 0.6,
-		"min_wave": 2, "xp": 5, "regen": 1.0, "radius": 0.42, "height": 2.05, "head_radius": 0.25, "flying": false},
+		"xp": 5, "regen": 1.0, "radius": 0.42, "height": 2.05, "head_radius": 0.25, "flying": false},
 	"dire_bat": {"name": "Dire Bat", "hp": 1.0, "speed": 8.0, "damage": 5.0, "atk_cd": 0.4,
-		"min_wave": 3, "xp": 2, "regen": 1.0, "radius": 0.30, "height": 0.55, "head_radius": 0.18, "flying": true},
+		"xp": 2, "regen": 1.0, "radius": 0.30, "height": 0.55, "head_radius": 0.18, "flying": true},
 	"blood_lord": {"name": "Blood Lord", "hp": 80.0, "speed": 5.0, "damage": 12.0, "atk_cd": 0.8,
-		"min_wave": 4, "xp": 7, "regen": 2.0, "radius": 0.48, "height": 2.30, "head_radius": 0.28, "flying": false},
+		"xp": 7, "regen": 2.0, "radius": 0.48, "height": 2.30, "head_radius": 0.28, "flying": false},
 	"knight": {"name": "Knight", "hp": 500.0, "speed": 2.6, "damage": 25.0, "atk_cd": 1.5,
-		"min_wave": 5, "xp": 15, "regen": 3.0, "radius": 0.95, "height": 3.30, "head_radius": 0.36, "flying": false},
+		"xp": 15, "regen": 3.0, "radius": 0.95, "height": 3.30, "head_radius": 0.36, "flying": false},
 	# Capra y Thrall comparten modelo (Skeleton_Warrior, el del casco con cuernos),
 	# así que lo ÚNICO que los distingue en pantalla es el tamaño: la Capra va
 	# 1.5x el Thrall a propósito. Si algún día se les cambia la altura, mantener
 	# esa distancia o se vuelven indistinguibles en pleno combate.
 	"capra": {"name": "Capra", "hp": 120.0, "speed": 8.0, "damage": 18.0, "atk_cd": 1.2,
-		"min_wave": 6, "xp": 10, "regen": 2.0, "radius": 0.64, "height": 3.10, "head_radius": 0.38, "flying": false},
+		"xp": 10, "regen": 2.0, "radius": 0.64, "height": 3.10, "head_radius": 0.38, "flying": false},
 	"sorceress": {"name": "Sorceress", "hp": 1.0, "speed": 3.5, "damage": 8.0, "atk_cd": 0.5,
-		"min_wave": 7, "xp": 2, "regen": 1.0, "radius": 0.42, "height": 2.05, "head_radius": 0.25, "flying": true},
+		"xp": 2, "regen": 1.0, "radius": 0.42, "height": 2.05, "head_radius": 0.25, "flying": true},
 	"demon_skull": {"name": "Demon Skull", "hp": 30.0, "speed": 6.0, "damage": 10.0, "atk_cd": 0.7,
-		"min_wave": 8, "xp": 4, "regen": 1.0, "radius": 0.38, "height": 0.85, "head_radius": 0.28, "flying": true},
+		"xp": 4, "regen": 1.0, "radius": 0.38, "height": 0.85, "head_radius": 0.28, "flying": true},
 }
 
 const ALPHA_HP_MULT := 5.0
@@ -165,6 +165,103 @@ const ENEMY_COLOR := {
 	"knight": Color(0.25, 0.25, 0.3), "capra": Color(0.3, 0.05, 0.05),
 	"sorceress": Color(0.35, 0.05, 0.45), "demon_skull": Color(0.7, 0.3, 0.05),
 }
+
+# --- 7.0 Reglas de aparición ---
+## CUÁNDO y CUÁNTOS aparecen, separado de ENEMY_STATS, que dice qué ES un enemigo.
+## Cada fila se evalúa así (ver `wave_composition`):
+##     n = int(base * share) + flat
+##     if rand: n += randi_range(rand[0], rand[1])
+##     if step: n *= (1 + wave / step)          ← división ENTERA
+##
+## Las 8 filas de abajo REPRODUCEN EXACTAMENTE las fórmulas que antes estaban
+## escritas a mano una por una. `knight` es el caso que parece no encajar y encaja:
+## `1 + wave/5` es `flat` 1 multiplicado por `(1 + wave/5)`.
+##
+## ⚠ EL ORDEN DE ESTE DICCIONARIO ES PARTE DEL BALANCE. `wave_composition` consume
+## el RNG global al recorrerlo, así que reordenar las filas —o agregar una en el
+## medio— corre la secuencia de `randi_range` y cambia TODAS las oleadas. Los tipos
+## que vengan de mods se agregan al final, nunca intercalados.
+##
+## `spawn_dist` es a qué distancia del jugador nace. La Capra nace más lejos porque
+## carga a 8 u/s: apareciendo a 40 m no daba tiempo a reaccionar.
+const ENEMY_SPAWN := {
+	"hollow":      {"min_wave": 1, "share": 0.5},
+	"thrall":      {"min_wave": 2, "share": 0.15, "flat": 1},
+	"dire_bat":    {"min_wave": 3, "rand": [3, 5], "step": 5},
+	"blood_lord":  {"min_wave": 4, "share": 0.1, "flat": 1},
+	"knight":      {"min_wave": 5, "flat": 1, "step": 5},
+	"capra":       {"min_wave": 6, "share": 0.08, "flat": 1, "spawn_dist": [46.0, 58.0]},
+	"sorceress":   {"min_wave": 7, "rand": [2, 4], "step": 8},
+	"demon_skull": {"min_wave": 8, "rand": [2, 3], "step": 6},
+}
+
+const SPAWN_DIST_DEFAULT := [40.0, 50.0]
+
+# --- Registro EN CALIENTE (base + mods) ---
+## `ENEMY_STATS`/`ENEMY_SPAWN`/`ENEMY_COLOR` son `const`: son la tabla de balance
+## del juego base y tienen que seguir siendo inmutables y legibles como tal. Lo que
+## el juego CONSUME son estas tres copias, que un mod puede pisar.
+##
+## Nadie fuera de este archivo debería tocarlas directo: usar los accesores de abajo,
+## que toleran un tipo inexistente en vez de romper.
+var enemy_stats: Dictionary = {}
+var enemy_spawn: Dictionary = {}
+var enemy_color: Dictionary = {}
+
+func _ready() -> void:
+	rebuild_enemy_registry({}, {}, {})
+
+## La llama ModManager DESPUÉS de leer la carpeta de mods, con diccionarios YA
+## validados. Este archivo no sabe que existen los mods ni dónde viven.
+func rebuild_enemy_registry(stats_ov: Dictionary, spawn_ov: Dictionary, color_ov: Dictionary) -> void:
+	# duplicate(true) de un `const` devuelve una copia ESCRIBIBLE; el const en sí es
+	# de sólo lectura y `.merge()` sobre él falla en silencio.
+	enemy_stats = ENEMY_STATS.duplicate(true)
+	enemy_spawn = ENEMY_SPAWN.duplicate(true)
+	enemy_color = ENEMY_COLOR.duplicate(true)
+	if enemy_stats.is_read_only():
+		push_error("GameData: la copia del registro salió de sólo lectura; los mods no van a poder pisar nada")
+
+	# Merge campo por campo: un mod que sólo trae `hp` no borra el resto de la fila.
+	for t: String in stats_ov:
+		var row: Dictionary = enemy_stats.get(t, ENEMY_STATS["hollow"]).duplicate(true)
+		row.merge(stats_ov[t], true)
+		enemy_stats[t] = row
+	for t: String in spawn_ov:
+		var row: Dictionary = enemy_spawn.get(t, {}).duplicate(true)
+		row.merge(spawn_ov[t], true)
+		enemy_spawn[t] = row
+	for t: String in color_ov:
+		enemy_color[t] = color_ov[t]
+
+## Fila de stats de un tipo. Un tipo desconocido cae al Hollow en vez de romper:
+## `wave_manager` lo indexaba directo y un tipo sin fila tiraba la partida entera.
+func enemy_stats_of(t: String) -> Dictionary:
+	return enemy_stats.get(t, enemy_stats.get("hollow", ENEMY_STATS["hollow"]))
+
+## El `fallback` es parámetro porque cada consumidor quiere uno distinto: el modelo
+## procedural cae a rojo oscuro y el minimapa a blanco. Aplanarlos cambiaría cómo se
+## ve el minimapa de un tipo sin color declarado.
+func enemy_color_of(t: String, fallback: Color = Color(0.5, 0.1, 0.1)) -> Color:
+	return enemy_color.get(t, fallback)
+
+## Nombre para mostrar. Un tipo desconocido devuelve su propio id en vez del nombre
+## del Hollow: en el kill feed es preferible leer `goblin` a que mienta "Hollow".
+func enemy_name_of(t: String) -> String:
+	return enemy_stats.get(t, {}).get("name", t)
+
+func enemy_spawn_of(t: String) -> Dictionary:
+	return enemy_spawn.get(t, {})
+
+## Todos los tipos que existen HOY (base + mods). Es la lista que tienen que
+## recorrer las herramientas de tools/ en vez de su propio array hardcodeado.
+func enemy_types() -> Array:
+	return enemy_stats.keys()
+
+## A qué distancia del jugador nace este tipo.
+func spawn_dist_of(t: String) -> Array:
+	var r: Array = enemy_spawn.get(t, {}).get("spawn_dist", SPAWN_DIST_DEFAULT)
+	return r if r.size() == 2 else SPAWN_DIST_DEFAULT
 
 # --- 3.4 Daño final de un disparo ---
 ## Daño base del arma pasado por rareza y por spin-up. Vive acá y no en
@@ -306,24 +403,35 @@ static func damage_mult_of(surplus: float) -> float:
 
 ## Composición SIN techo: lo que la oleada pediría idealmente. El que la consume
 ## es `wave_manager.start_wave()`, que la recorta y de paso saca el multiplicador.
-static func wave_composition(wave: int) -> Dictionary:
+## Recorre `enemy_spawn` en ORDEN DE INSERCIÓN, que es lo que preserva el balance:
+## las tres llamadas a `randi_range` (dire_bat, sorceress, demon_skull) tienen que
+## caer en la misma secuencia del RNG global que cuando esto eran ocho `if` escritos
+## a mano. Por eso el `continue` de `min_wave` va ANTES del `randi_range`: en la
+## oleada 3 el original tiraba el dado del murciélago pero NO el de la bruja, y ese
+## corto-circuito es parte del resultado.
+##
+## Dejó de ser `static` porque lee el registro en caliente. Todos los llamadores ya
+## usaban el prefijo `GameData.`, así que no cambia nada para ellos.
+func wave_composition(wave: int) -> Dictionary:
 	var base := wave_base(wave)
 	var comp: Dictionary = {}
-	comp["hollow"] = int(base * 0.5)
-	if wave >= 2:
-		comp["thrall"] = int(base * 0.15) + 1
-	if wave >= 3:
-		comp["dire_bat"] = randi_range(3, 5) * (1 + wave / 5)
-	if wave >= 4:
-		comp["blood_lord"] = int(base * 0.1) + 1
-	if wave >= 5:
-		comp["knight"] = 1 + wave / 5
-	if wave >= 6:
-		comp["capra"] = int(base * 0.08) + 1
-	if wave >= 7:
-		comp["sorceress"] = randi_range(2, 4) * (1 + wave / 8)
-	if wave >= 8:
-		comp["demon_skull"] = randi_range(2, 3) * (1 + wave / 6)
+	for t: String in enemy_spawn:
+		var r: Dictionary = enemy_spawn[t]
+		if wave < int(r.get("min_wave", 1)):
+			continue
+		var n := int(base * float(r.get("share", 0.0))) + int(r.get("flat", 0))
+		var rnd: Array = r.get("rand", [])
+		if rnd.size() == 2:
+			n += randi_range(int(rnd[0]), int(rnd[1]))
+		var step := int(r.get("step", 0))
+		if step > 0:
+			n *= (1 + wave / step)   # división ENTERA a propósito
+		# Los 8 tipos base NUNCA dan 0 (todos tienen piso: `flat` 1 o `rand` >= 2, y
+		# hollow es int(base*0.5) con base >= 8), así que este filtro no los toca.
+		# Está para los mods: `cap_composition` hace maxi(1, ...) por cada clave
+		# presente, o sea que un tipo en 0 se convertiría en 1 enemigo real.
+		if n > 0:
+			comp[t] = n
 	return comp
 
 static func spawn_interval(wave: int) -> float:

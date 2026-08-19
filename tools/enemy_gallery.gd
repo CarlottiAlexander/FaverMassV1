@@ -65,7 +65,7 @@ func _ready() -> void:
 		# fuera del árbol y devuelve identidad con un error por consola.
 		add_child(inst)
 		# escalar al tamaño REAL que tiene en el juego (body_height de GameData)
-		var stats: Dictionary = GameData.ENEMY_STATS.get(model_name, {})
+		var stats: Dictionary = GameData.enemy_stats.get(model_name, {})
 		if stats.has("height"):
 			var nat := _height_of(inst)
 			if nat > 0.01:
