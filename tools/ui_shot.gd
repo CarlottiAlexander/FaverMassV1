@@ -18,8 +18,15 @@ func _run() -> void:
 
 	GameState.open_options(GameState.State.TITLE)
 	await _shot("opciones")
+	GameState.close_overlay()
 
-	GameState.close_options()
+	# Con el fixture cargado (correr con -- --mods=tools/mods_fixture) esta foto
+	# muestra los tres casos de una: un mod que anda, uno con aviso y uno
+	# descartado con su motivo en rojo.
+	GameState.open_mods(GameState.State.TITLE)
+	await _shot("mods")
+
+	GameState.close_overlay()
 	GameState.start_run()
 	var player = get_tree().get_first_node_in_group("player")
 	if player:

@@ -2,10 +2,14 @@ extends Node
 ## Autoload. Máquina de estados de pantallas (sección 10.1):
 ## TITLE -> PLAYING <-> PAUSED -> OPTIONS (vuelve a donde se abrió) | PLAYING -> DEAD
 
-enum State { TITLE, PLAYING, PAUSED, OPTIONS, DEAD }
+## MODS es una pantalla superpuesta igual que OPTIONS: se abre desde el título o
+## desde la pausa y vuelve a donde se abrió.
+enum State { TITLE, PLAYING, PAUSED, OPTIONS, DEAD, MODS }
 
 var state: int = State.TITLE
-var options_return_state: int = State.TITLE
+## A dónde vuelve la pantalla superpuesta que esté abierta (Opciones o Mods). Es
+## una sola variable para las dos porque nunca pueden estar abiertas a la vez.
+var overlay_return_state: int = State.TITLE
 
 # stats de partida (sección 10.5)
 var run_wave := 0
@@ -35,8 +39,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			change_state(State.PAUSED)
 		elif state == State.PAUSED:
 			change_state(State.PLAYING)
-		elif state == State.OPTIONS:
-			close_options()
+		elif state == State.OPTIONS or state == State.MODS:
+			close_overlay()
 
 func change_state(new_state: int) -> void:
 	state = new_state
@@ -44,13 +48,25 @@ func change_state(new_state: int) -> void:
 	state_changed.emit(new_state)
 
 func open_options(from_state: int) -> void:
-	options_return_state = from_state
+	overlay_return_state = from_state
 	change_state(State.OPTIONS)
 
+func open_mods(from_state: int) -> void:
+	overlay_return_state = from_state
+	change_state(State.MODS)
+
+func close_overlay() -> void:
+	change_state(overlay_return_state)
+
+## Compatibilidad: `tools/ui_shot.gd` y los botones "Volver" ya la llamaban.
 func close_options() -> void:
-	change_state(options_return_state)
+	close_overlay()
 
 func start_run() -> void:
+	# Los cambios de mods se aplican ACÁ y no en caliente: un enemigo vivo ya
+	# resolvió su modelo y su hitbox en su `_ready()`, así que cambiarle el registro
+	# debajo lo deja inconsistente. Empezar partida es el único momento seguro.
+	ModManager.commit_if_needed()
 	run_wave = 0
 	run_kills = 0
 	run_headshots = 0

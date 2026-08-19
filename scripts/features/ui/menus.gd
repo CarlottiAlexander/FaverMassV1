@@ -12,6 +12,7 @@ var player: Node = null
 var title_panel: Control
 var pause_panel: Control
 var options_panel: Control
+var mods_panel: Control
 var death_panel: Control
 var death_stats_label: Label
 var title_logo: Label
@@ -25,10 +26,12 @@ func _ready() -> void:
 	title_panel = _build_title_panel()
 	pause_panel = _build_pause_panel()
 	options_panel = _build_options_panel()
+	mods_panel = ModsPanel.new()
 	death_panel = _build_death_panel()
 	add_child(title_panel)
 	add_child(pause_panel)
 	add_child(options_panel)
+	add_child(mods_panel)
 	add_child(death_panel)
 
 func _process(delta: float) -> void:
@@ -40,7 +43,14 @@ func apply_state(new_state: int) -> void:
 	title_panel.visible = new_state == GameState.State.TITLE
 	pause_panel.visible = new_state == GameState.State.PAUSED
 	options_panel.visible = new_state == GameState.State.OPTIONS
+	mods_panel.visible = new_state == GameState.State.MODS
 	death_panel.visible = new_state == GameState.State.DEAD
+
+	# Se re-lee la carpeta al abrir: si el jugador copió un mod con el juego ya
+	# abierto (que es lo que va a hacer siempre), lo ve sin reiniciar.
+	if new_state == GameState.State.MODS:
+		ModManager.scan()
+		mods_panel.refrescar()
 
 	if new_state == GameState.State.DEAD:
 		death_stats_label.text = "Oleadas sobrevividas: %d\nKills: %d   Headshots: %d (%.0f%%)\nTiempo vivo: %ds" % [
@@ -58,7 +68,8 @@ func _panel_bg(alpha: float) -> ColorRect:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	return bg
 
-func _style_button(b: Button) -> void:
+## Estatica para que `ModsPanel` use la misma estetica oxblood sin duplicarla.
+static func style_button(b: Button) -> void:
 	b.custom_minimum_size = Vector2(260, 46)
 	b.add_theme_font_size_override("font_size", 20)
 	var normal := StyleBoxFlat.new()
@@ -103,19 +114,25 @@ func _build_title_panel() -> Control:
 
 	var btn_play := Button.new()
 	btn_play.text = "Jugar"
-	_style_button(btn_play)
+	style_button(btn_play)
 	btn_play.pressed.connect(func(): GameState.start_run())
 	vbox.add_child(btn_play)
 
 	var btn_options := Button.new()
 	btn_options.text = "Opciones"
-	_style_button(btn_options)
+	style_button(btn_options)
 	btn_options.pressed.connect(func(): GameState.open_options(GameState.State.TITLE))
 	vbox.add_child(btn_options)
 
+	var btn_mods := Button.new()
+	btn_mods.text = "Mods"
+	style_button(btn_mods)
+	btn_mods.pressed.connect(func(): GameState.open_mods(GameState.State.TITLE))
+	vbox.add_child(btn_mods)
+
 	var btn_quit := Button.new()
 	btn_quit.text = "Salir"
-	_style_button(btn_quit)
+	style_button(btn_quit)
 	btn_quit.pressed.connect(func(): get_tree().quit())
 	vbox.add_child(btn_quit)
 
@@ -138,19 +155,25 @@ func _build_pause_panel() -> Control:
 
 	var btn_resume := Button.new()
 	btn_resume.text = "Reanudar"
-	_style_button(btn_resume)
+	style_button(btn_resume)
 	btn_resume.pressed.connect(func(): GameState.change_state(GameState.State.PLAYING))
 	vbox.add_child(btn_resume)
 
 	var btn_options := Button.new()
 	btn_options.text = "Opciones"
-	_style_button(btn_options)
+	style_button(btn_options)
 	btn_options.pressed.connect(func(): GameState.open_options(GameState.State.PAUSED))
 	vbox.add_child(btn_options)
 
+	var btn_mods := Button.new()
+	btn_mods.text = "Mods"
+	style_button(btn_mods)
+	btn_mods.pressed.connect(func(): GameState.open_mods(GameState.State.PAUSED))
+	vbox.add_child(btn_mods)
+
 	var btn_quit := Button.new()
 	btn_quit.text = "Salir al menú"
-	_style_button(btn_quit)
+	style_button(btn_quit)
 	btn_quit.pressed.connect(_on_quit_to_menu)
 	vbox.add_child(btn_quit)
 
@@ -211,7 +234,7 @@ func _build_options_panel() -> Control:
 
 	var btn_back := Button.new()
 	btn_back.text = "Volver"
-	_style_button(btn_back)
+	style_button(btn_back)
 	btn_back.pressed.connect(func(): GameState.close_options())
 	vbox.add_child(btn_back)
 
@@ -256,7 +279,7 @@ func _build_death_panel() -> Control:
 
 	var btn_again := Button.new()
 	btn_again.text = "Jugar de nuevo"
-	_style_button(btn_again)
+	style_button(btn_again)
 	btn_again.pressed.connect(func():
 		GameState.start_run()
 		get_tree().reload_current_scene()
@@ -265,7 +288,7 @@ func _build_death_panel() -> Control:
 
 	var btn_quit := Button.new()
 	btn_quit.text = "Salir al menú"
-	_style_button(btn_quit)
+	style_button(btn_quit)
 	btn_quit.pressed.connect(_on_quit_to_menu)
 	vbox.add_child(btn_quit)
 

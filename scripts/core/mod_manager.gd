@@ -32,6 +32,9 @@ var _models: Dictionary = {}
 ## Ids deshabilitados por el jugador. Se guardan los DESHABILITADOS y no los
 ## habilitados para que un mod recién copiado esté prendido sin tocar nada.
 var _disabled: Dictionary = {}
+## id -> {warnings: Array, summary: String} de la última CARGA. Sobrevive a los
+## re-escaneos, que sólo miran nombres de archivo y no saben si el .glb se leyó.
+var _load_notes: Dictionary = {}
 
 func _ready() -> void:
 	var res := ModPaths.ensure_dir()
@@ -72,6 +75,23 @@ func scan() -> void:
 	for id: String in ids:
 		entries.append(_scan_one(id))
 	_flag_conflicts()
+	_apply_load_notes()
+
+## Vuelve a pegar lo que se supo al CARGAR (modelos que fallaron, cuántos entraron)
+## sobre las entradas recién escaneadas.
+##
+## Hace falta porque `scan()` reconstruye las entradas de cero y el escaneo sólo
+## mira nombres de archivo: no sabe si el .glb se pudo leer. Sin esto, abrir la
+## pantalla de Mods hacía que un mod con el modelo corrupto pasara de mostrar su
+## aviso a decir "listo" — el panel mentía.
+func _apply_load_notes() -> void:
+	for e: Dictionary in entries:
+		var n: Dictionary = _load_notes.get(e["id"], {})
+		if n.is_empty():
+			continue
+		e["summary"] = n.get("summary", "")
+		for w: String in n.get("warnings", []):
+			e["warnings"].append(w)
 
 func _scan_one(id: String) -> Dictionary:
 	var path: String = mods_dir.path_join(id)
@@ -143,23 +163,31 @@ func commit() -> void:
 	Enemy.clear_anim_cache()
 
 	_models.clear()
+	_load_notes.clear()
 	for e: Dictionary in entries:
 		if not e["enabled"] or not e["errors"].is_empty():
 			continue
 		var loaded := 0
+		var notas: Array = []
 		for t: String in e["replacements"]:
 			var r := ModModelLoader.load_glb(e["replacements"][t])
 			for w: String in r["warnings"]:
-				e["warnings"].append("%s: %s" % [t, w])
+				notas.append("%s: %s" % [t, w])
 			if r["error"] != "":
 				# El modelo falla, el mod sigue vivo: los otros reemplazos que
 				# traiga tienen que entrar igual, y ese enemigo se queda con el
 				# modelo original en vez de desaparecer.
-				e["warnings"].append("%s: %s (se usa el modelo original)" % [t, r["error"]])
+				notas.append("%s: %s (se usa el modelo original)" % [t, r["error"]])
 				continue
 			_models[t] = r["scene"]
 			loaded += 1
-		e["summary"] = "%d modelo%s" % [loaded, "" if loaded == 1 else "s"]
+		var resumen := "%d modelo%s" % [loaded, "" if loaded == 1 else "s"]
+		# Se guardan aparte para que un re-escaneo (abrir la pantalla de Mods) no
+		# los pierda y el panel deje de decir la verdad.
+		_load_notes[e["id"]] = {"warnings": notas, "summary": resumen}
+		e["summary"] = resumen
+		for w: String in notas:
+			e["warnings"].append(w)
 
 	# Etapa 1 no toca stats: un reemplazo cambia el modelo y nada más. Se llama
 	# igual para dejar el registro en un estado conocido.
@@ -176,6 +204,10 @@ func has_any() -> bool:
 
 # --- Habilitar / deshabilitar ----------------------------------------------
 
+## Hay cambios marcados que todavía no se aplicaron. Lo lee el menú para mostrar
+## "se aplican al empezar una partida nueva".
+var pending := false
+
 func set_enabled(id: String, enabled: bool) -> void:
 	if enabled:
 		_disabled.erase(id)
@@ -184,7 +216,18 @@ func set_enabled(id: String, enabled: bool) -> void:
 	for e: Dictionary in entries:
 		if e["id"] == id:
 			e["enabled"] = enabled
+	pending = true
 	_save_disabled()
+
+## La llama `GameState.start_run()`. Si nadie tocó nada no hace nada: volver a
+## parsear todos los GLB al empezar cada partida sería pagar el arranque de nuevo
+## sin motivo.
+func commit_if_needed() -> void:
+	if not pending:
+		return
+	scan()
+	commit()
+	pending = false
 
 func _load_disabled() -> void:
 	_disabled.clear()
