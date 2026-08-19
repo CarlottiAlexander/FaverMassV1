@@ -117,6 +117,40 @@ No se puede escribir comportamiento propio: los mods NO ejecutan codigo. Si
 necesitas logica condicional ("si el jugador esta bajo de vida, huye"), jefes
 multifase o armas nuevas, eso hoy no se puede.
 
+CREAR UN MAPA
+-------------
+Un mapa NO es un modelo 3D: son los numeros con los que el juego genera la
+arena. Van en el mismo mod.json, y despues se elige desde el menu de Mods.
+
+    "maps": {
+      "catedral": {
+        "name": "Catedral en ruinas",
+        "arena_radius": 70,
+        "obstacles": { "count": 34, "seed": 7, "size_min": 1.5, "size_max": 9.0,
+                       "height_min": 2.0, "height_max": 12.0, "keep_out": 8.0 },
+        "walls": { "base_height": 4.0, "extra_height": 10.0 },
+        "sky":  { "calm_top": [0.02,0.03,0.09], "calm_horizon": [0.1,0.1,0.2],
+                  "chaos_top": [0.3,0.02,0.02], "chaos_horizon": [0.5,0.1,0.05] },
+        "fog":  { "calm": [0.1,0.1,0.16], "chaos": [0.4,0.1,0.1],
+                  "begin": 26, "end": 40 },
+        "moon": { "enabled": false },
+        "floor": { "color": [0.12, 0.12, 0.14] }
+      }
+    }
+
+    arena_radius    de 25 a 300. Ojo que los enemigos nacen a 40-58 m tuyo:
+                    en una arena muy chica te van a aparecer encima.
+    obstacles.seed  cambiala y sale otra distribucion de bloques. El mismo
+                    numero da siempre el mismo mapa.
+    keep_out        radio libre en el centro, donde arrancas.
+    walls           base_height es la altura inicial; extra_height cuanto
+                    crece con el caos de las oleadas altas.
+    fog.begin/end   donde empieza y termina la pared de niebla. El corte de
+                    dibujado de los enemigos se mueve solo con esto, para que
+                    no los veas aparecer de la nada.
+
+Los colores son [rojo, verde, azul] de 0 a 1.
+
 SI TU MODELO NO SE VE BIEN
 --------------------------
     "model_yaw": 0          si camina de espaldas (por defecto 180)

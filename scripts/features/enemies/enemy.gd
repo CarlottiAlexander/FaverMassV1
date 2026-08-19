@@ -102,20 +102,19 @@ var bob_phase := 0.0
 ## Modelos KayKit: AnimationPlayer del rig importado (null si este tipo usa el
 ## modelo procedural). `current_anim_locked` marca una animación de una sola
 ## pasada (ataque/golpe) que no debe interrumpirse por la de locomoción.
-## Rasgos declarados por un mod: {nombre: {parámetros}}. Vacío para los 8 base.
-var traits: Dictionary = {}
-## Estado en vivo de esos rasgos (escudo restante, ráfaga activa...). Va todo acá
-## y no como campos nuevos del enemigo: cada trait sumaría 2-3 campos a los 50
-## enemigos vivos, y el 90% de ellos no lo usaría.
-var trait_state: Dictionary = {}
-
-## Ajustes del pipeline de modelo declarados por un mod. Vacío = todo por defecto.
-## Lo lee `EnemyModelImport` en vez de sus constantes, que están escritas contra los
-## dos packs del juego base.
-var model_opts: Dictionary = {}
-
 var anim_player: AnimationPlayer = null
 var current_anim_locked := false
+
+# --- lo que declara un mod (vacío en los 8 tipos base) ---
+## Rasgos componibles: {nombre: {parámetros}}. Ver `enemy_traits.gd`.
+var traits: Dictionary = {}
+## Estado en vivo de esos rasgos (escudo restante, ráfaga activa...). Va todo acá
+## y no como campos nuevos del enemigo: cada rasgo sumaría 2-3 campos a los 50
+## enemigos vivos, y el 90% de ellos no lo usaría.
+var trait_state: Dictionary = {}
+## Ajustes del pipeline de modelo. Lo lee `EnemyModelImport` en vez de sus
+## constantes, que están escritas contra los dos packs del juego base.
+var model_opts: Dictionary = {}
 ## Tiempo acumulado desde el último avance de animación, y desfasaje para que no
 ## todos los enemigos actualicen en el mismo frame (si no, cada 3 frames habría
 ## un pico que se sentiría como tirón).
@@ -339,7 +338,7 @@ func _apply_render_cull() -> void:
 	# El trait `cloak` es, literalmente, un corte de dibujado más cercano: el
 	# enemigo no se ve hasta que entrás en su distancia de revelado. Lo resuelve el
 	# RenderingServer igual que el LOD, así que no cuesta un solo frame de GDScript.
-	var corte := EnemyTraits.cull_distance(self, GameData.ENEMY_LOD_DISTANCE)
+	var corte := EnemyTraits.cull_distance(self, GameData.enemy_lod_distance)
 	for m in meshes:
 		m.visibility_range_end = corte
 		m.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
@@ -688,7 +687,7 @@ func _physics_process(delta: float) -> void:
 ## separarse de los vecinos) es trabajo que nadie iba a ver.
 func _update_visibility() -> void:
 	dist_to_player_sq = global_position.distance_squared_to(player.global_position)
-	var cull := GameData.ENEMY_LOD_DISTANCE
+	var cull := GameData.enemy_lod_distance
 	near_player = dist_to_player_sq <= cull * cull
 	if not near_player:
 		visible_to_player = false
@@ -770,7 +769,7 @@ func _resolve_separation(delta: float) -> void:
 	# de la arena — y afuera no hay piso, se caían al vacío. Se veía en la
 	# medición: 94 enemigos se convertían en 46 solos, sin que nadie disparara.
 	if moved:
-		var limit := GameData.ARENA_RADIUS - 1.5
+		var limit := GameData.arena_radius - 1.5
 		global_position.x = clampf(global_position.x, -limit, limit)
 		global_position.z = clampf(global_position.z, -limit, limit)
 

@@ -142,7 +142,7 @@ func _physics_process(delta: float) -> void:
 func _rescue_if_fell_off() -> void:
 	if global_position.y > FALL_RESCUE_Y:
 		return
-	var limit := GameData.ARENA_RADIUS - 2.0
+	var limit := GameData.arena_radius - 2.0
 	global_position = Vector3(
 		clampf(global_position.x, -limit, limit),
 		6.0,

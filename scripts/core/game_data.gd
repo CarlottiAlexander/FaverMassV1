@@ -3,7 +3,12 @@ extends Node
 ## Fuente: ../FaverMass_Especificacion_Godot.docx
 
 # --- 1. Constantes globales ---
+## Radio de la arena del juego base. Sigue siendo la constante de referencia; lo
+## que el juego CONSUME es `arena_radius`, que un mapa de mod puede cambiar.
 const ARENA_RADIUS := 50.0
+## Radio en vivo. Lo pisa `ModManager` al aplicar un mapa y lo leen el spawn, el
+## recorte de la arena, el rescate del jugador y el mundo.
+var arena_radius := ARENA_RADIUS
 const GRAVITY := 20.0
 const PLAYER_HEIGHT_STAND := 1.7
 const PLAYER_HEIGHT_CROUCH := 1.0
@@ -18,6 +23,9 @@ const MAX_ECSTASY := 100.0
 ## caer detrás de la niebla para que no se vea aparecer nada de la nada.
 ## Si se mueve una, se mueve la otra.
 const ENEMY_LOD_DISTANCE := 32.0
+## Corte en vivo. Lo mueve `world.gd` junto con la niebla del mapa: si se corren
+## por separado, los enemigos aparecen de la nada en el aire.
+var enemy_lod_distance := ENEMY_LOD_DISTANCE
 const RAILGUN_SPEED_MULT := 1.3
 
 # --- 3.3 Rareza ---

@@ -20,6 +20,10 @@ const FOG_CHAOS := Color(0.34, 0.13, 0.11)
 
 @onready var world_environment: WorldEnvironment = get_tree().current_scene.get_node("WorldEnvironment")
 
+## Perfil del mapa en uso. Los defaults son los valores que estaban hardcodeados
+## acá arriba, así que sin mods la arena sale idéntica.
+var perfil: Dictionary = MapProfile.DEFECTO
+
 var walls_root: Node3D
 var moon: MeshInstance3D
 var debris_root: Node3D
@@ -27,6 +31,10 @@ var debris_pieces: Array = []
 var moon_orbit_t := 0.0
 
 func _ready() -> void:
+	perfil = ModManager.map_profile()
+	GameData.arena_radius = float(perfil["arena_radius"])
+	_apply_floor()
+	_apply_fog()
 	_generate_obstacles()
 	_generate_walls()
 	_generate_sky_rig()
@@ -39,6 +47,60 @@ func _ready() -> void:
 	_connect_wave_manager.call_deferred()
 	_on_chaos_changed(0.0)
 
+## El piso vive en `main.tscn`, no acá, así que se resuelve por la escena actual —
+## mismo patrón que `world_environment`.
+##
+## ⚠ Hay que DUPLICAR la malla y el material antes de tocarlos: son sub-recursos
+## del `.tscn`, que Godot cachea y reinstancia desde el mismo `PackedScene`. Sin
+## duplicar, el color de un mapa se quedaría pegado entre partidas y al volver al
+## mapa por defecto el piso seguiría del color anterior. Es la misma trampa que ya
+## mordió con los materiales de la explosión y con los meshes de los enemigos.
+func _apply_floor() -> void:
+	var escena := get_tree().current_scene
+	if not escena.has_node("Floor/MeshInstance3D"):
+		return
+	var mi: MeshInstance3D = escena.get_node("Floor/MeshInstance3D")
+	var col: Array = perfil["floor"]["color"]
+
+	# El piso se agranda con la arena, si no un mapa grande deja al jugador
+	# caminando sobre el vacío.
+	if mi.mesh is BoxMesh:
+		var m: BoxMesh = mi.mesh.duplicate()
+		m.size.x = GameData.arena_radius * 2.0
+		m.size.z = GameData.arena_radius * 2.0
+		mi.mesh = m
+	if escena.has_node("Floor/CollisionShape3D"):
+		var cs: CollisionShape3D = escena.get_node("Floor/CollisionShape3D")
+		if cs.shape is BoxShape3D:
+			var sh: BoxShape3D = cs.shape.duplicate()
+			sh.size.x = GameData.arena_radius * 2.0
+			sh.size.z = GameData.arena_radius * 2.0
+			cs.shape = sh
+
+	if col.is_empty():
+		return
+	var mat := mi.get_surface_override_material(0)
+	if mat == null:
+		mat = mi.mesh.surface_get_material(0)
+	if mat == null:
+		return
+	var m2: StandardMaterial3D = mat.duplicate()
+	m2.albedo_color = MapProfile.color_of(col)
+	mi.set_surface_override_material(0, m2)
+
+## La niebla es de PROFUNDIDAD y vive en `main.tscn`.
+##
+## ⚠ Va ATADA al corte de dibujado de los enemigos: el culleo es SECO, sin fundido,
+## y sólo no se nota porque a esa distancia la niebla ya es opaca. Un mapa que
+## corre la niebla más lejos sin correr el LOD haría que los enemigos aparezcan de
+## la nada en el aire. Por eso se mueven juntos y no por separado.
+func _apply_fog() -> void:
+	var env: Environment = world_environment.environment
+	var fg: Dictionary = perfil["fog"]
+	env.fog_depth_begin = float(fg["begin"])
+	env.fog_depth_end = float(fg["end"])
+	GameData.enemy_lod_distance = float(fg["end"]) + 2.0
+
 func _connect_wave_manager() -> void:
 	var wms := get_tree().get_nodes_in_group("wave_manager")
 	if wms.size() > 0:
@@ -49,19 +111,24 @@ func _generate_obstacles() -> void:
 	root.name = "Obstacles"
 	add_child(root)
 
+	var ob: Dictionary = perfil["obstacles"]
+	var s_min := float(ob["size_min"])
+	var s_max := float(ob["size_max"])
+	var keep_out := float(ob["keep_out"])
+
 	var rng := RandomNumberGenerator.new()
-	rng.seed = OBSTACLE_SEED
-	for i in OBSTACLE_COUNT:
-		var w := rng.randf_range(2.0, 6.0)
-		var h := rng.randf_range(2.0, 8.0)
-		var d := rng.randf_range(2.0, 6.0)
+	rng.seed = int(ob["seed"])
+	for i in int(ob["count"]):
+		var w := rng.randf_range(s_min, s_max)
+		var h := rng.randf_range(float(ob["height_min"]), float(ob["height_max"]))
+		var d := rng.randf_range(s_min, s_max)
 		var pos := Vector3.ZERO
 		var attempts := 0
 		while attempts < 50:
-			var x := rng.randf_range(-GameData.ARENA_RADIUS + w, GameData.ARENA_RADIUS - w)
-			var z := rng.randf_range(-GameData.ARENA_RADIUS + d, GameData.ARENA_RADIUS - d)
+			var x := rng.randf_range(-GameData.arena_radius + w, GameData.arena_radius - w)
+			var z := rng.randf_range(-GameData.arena_radius + d, GameData.arena_radius - d)
 			pos = Vector3(x, h * 0.5, z)
-			if Vector2(x, z).length() >= KEEP_OUT_RADIUS:
+			if Vector2(x, z).length() >= keep_out:
 				break
 			attempts += 1
 
@@ -113,12 +180,13 @@ func _generate_walls() -> void:
 	walls_root.name = "Walls"
 	add_child(walls_root)
 
-	var r := GameData.ARENA_RADIUS
+	var r := GameData.arena_radius
+	var wh := float(perfil["walls"]["base_height"])
 	var configs := [
-		{"pos": Vector3(0, 0, -r), "size": Vector3(r * 2, WALL_BASE_HEIGHT, 0.5)},
-		{"pos": Vector3(0, 0, r), "size": Vector3(r * 2, WALL_BASE_HEIGHT, 0.5)},
-		{"pos": Vector3(-r, 0, 0), "size": Vector3(0.5, WALL_BASE_HEIGHT, r * 2)},
-		{"pos": Vector3(r, 0, 0), "size": Vector3(0.5, WALL_BASE_HEIGHT, r * 2)},
+		{"pos": Vector3(0, 0, -r), "size": Vector3(r * 2, wh, 0.5)},
+		{"pos": Vector3(0, 0, r), "size": Vector3(r * 2, wh, 0.5)},
+		{"pos": Vector3(-r, 0, 0), "size": Vector3(0.5, wh, r * 2)},
+		{"pos": Vector3(r, 0, 0), "size": Vector3(0.5, wh, r * 2)},
 	]
 	for cfg in configs:
 		var body := StaticBody3D.new()
@@ -205,8 +273,8 @@ func _on_chaos_changed(level: float) -> void:
 	var f := clampf(level / 3.0, 0.0, 1.0)
 	var env: Environment = world_environment.environment
 	var sky_mat: ProceduralSkyMaterial = env.sky.sky_material
-	sky_mat.sky_top_color = SKY_CALM_TOP.lerp(SKY_CHAOS_TOP, f)
-	sky_mat.sky_horizon_color = SKY_CALM_HORIZON.lerp(SKY_CHAOS_HORIZON, f)
+	sky_mat.sky_top_color = MapProfile.color_of(perfil["sky"]["calm_top"]).lerp(MapProfile.color_of(perfil["sky"]["chaos_top"]), f)
+	sky_mat.sky_horizon_color = MapProfile.color_of(perfil["sky"]["calm_horizon"]).lerp(MapProfile.color_of(perfil["sky"]["chaos_horizon"]), f)
 	# La niebla es de PROFUNDIDAD, no exponencial: transparente hasta
 	# `fog_depth_begin` y opaca en `fog_depth_end` (20 y 30, en main.tscn). Es una
 	# pared a distancia fija, que es lo que se buscaba — y es gratis, se calcula
@@ -214,12 +282,12 @@ func _on_chaos_changed(level: float) -> void:
 	# hubo que sacar por costo (ver §3).
 	# Acá sólo cambia el COLOR con el caos; `fog_density` en modo profundidad es un
 	# multiplicador global y se deja quieto en 1.0.
-	env.fog_light_color = FOG_CALM.lerp(FOG_CHAOS, f)
+	env.fog_light_color = MapProfile.color_of(perfil["fog"]["calm"]).lerp(MapProfile.color_of(perfil["fog"]["chaos"]), f)
 
 	for wall in walls_root.get_children():
 		var mesh_instance: MeshInstance3D = wall.get_node("Mesh")
 		var box: BoxMesh = mesh_instance.mesh
-		var h := WALL_BASE_HEIGHT + WALL_MAX_EXTRA_HEIGHT * f
+		var h := float(perfil["walls"]["base_height"]) + float(perfil["walls"]["extra_height"]) * f
 		box.size.y = h
 		# La COLISIÓN tiene que crecer con la pared. Antes sólo crecía la malla:
 		# a oleada alta el muro se veía de 9 m pero seguía frenando hasta 3 m,
@@ -232,4 +300,4 @@ func _on_chaos_changed(level: float) -> void:
 		wall.position.y = h * 0.5
 
 	debris_root.visible = level > 0.5
-	moon.visible = level > 1.0
+	moon.visible = level > 1.0 and bool(perfil["moon"]["enabled"])

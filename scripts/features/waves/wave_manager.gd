@@ -110,7 +110,7 @@ func _spawn_next() -> void:
 	# jugador si este estaba pegado al borde — el enemigo aparecía "de la
 	# nada" en vez de a 40-50 unidades). Si igual queda demasiado cerca
 	# después del recorte, se empuja a un piso mínimo de distancia.
-	var max_from_center := GameData.ARENA_RADIUS - 3.0
+	var max_from_center := GameData.arena_radius - 3.0
 	var flat := Vector2(pos.x, pos.z)
 	if flat.length() > max_from_center:
 		flat = flat.normalized() * max_from_center

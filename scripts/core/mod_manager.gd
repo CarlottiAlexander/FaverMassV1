@@ -45,6 +45,8 @@ var _opts: Dictionary = {}
 var _presets: Dictionary = {}
 ## tipo -> rasgos componibles.
 var _traits: Dictionary = {}
+## id de mapa -> perfil ya fusionado y validado.
+var _maps: Dictionary = {}
 
 func _ready() -> void:
 	var res := ModPaths.ensure_dir()
@@ -118,7 +120,7 @@ func _scan_one(id: String) -> Dictionary:
 		# `types` unifica los dos caminos: un reskin trae sólo {"model": ruta} y un
 		# tipo declarado en mod.json trae además stats/spawn/color/opts/preset. De
 		# acá para abajo nadie necesita saber de cuál de los dos vino.
-		"errors": [], "warnings": [], "types": {}, "summary": "", "declara": false,
+		"errors": [], "warnings": [], "types": {}, "maps": {}, "summary": "", "declara": false,
 	}
 
 	# El mod.json manda. Si está, la carpeta `reemplazos` no se mira: tener las dos
@@ -138,6 +140,7 @@ func _scan_one(id: String) -> Dictionary:
 			e["name"] = "%s — por %s" % [e["name"], m["author"]]
 		for t: String in m["enemies"]:
 			e["types"][t] = m["enemies"][t]
+		e["maps"] = m["maps"]
 		return e
 
 	var rep_dir: String = path.path_join("reemplazos")
@@ -206,6 +209,7 @@ func commit() -> void:
 	_opts.clear()
 	_presets.clear()
 	_traits.clear()
+	_maps.clear()
 	var stats_ov: Dictionary = {}
 	var spawn_ov: Dictionary = {}
 	var color_ov: Dictionary = {}
@@ -250,9 +254,19 @@ func commit() -> void:
 				continue
 			_models[t] = r["scene"]
 			loaded += 1
-		var resumen := "%d modelo%s" % [loaded, "" if loaded == 1 else "s"]
+		for mid: String in (e.get("maps", {}) as Dictionary):
+			_maps[mid] = e["maps"][mid]
+		# El resumen enumera sólo lo que el mod SÍ trae. Un mod que únicamente aporta
+		# un mapa decía "0 modelos", que es cierto y no informa nada.
+		var partes: Array = []
+		if loaded > 0:
+			partes.append("%d modelo%s" % [loaded, "" if loaded == 1 else "s"])
 		if nuevos > 0:
-			resumen += ", %d enemigo%s nuevo%s" % [nuevos, "" if nuevos == 1 else "s", "" if nuevos == 1 else "s"]
+			partes.append("%d enemigo%s nuevo%s" % [nuevos, "" if nuevos == 1 else "s", "" if nuevos == 1 else "s"])
+		var nmapas: int = (e.get("maps", {}) as Dictionary).size()
+		if nmapas > 0:
+			partes.append("%d mapa%s" % [nmapas, "" if nmapas == 1 else "s"])
+		var resumen := "listo" if partes.is_empty() else ", ".join(PackedStringArray(partes))
 		# Se guardan aparte para que un re-escaneo (abrir la pantalla de Mods) no
 		# los pierda y el panel deje de decir la verdad.
 		_load_notes[e["id"]] = {"warnings": notas, "summary": resumen}
@@ -297,6 +311,33 @@ func preset_of(enemy_type: String) -> String:
 ## Rasgos declarados para este tipo: {nombre: {parámetros}}. Vacío para los 8 base.
 func traits_of(enemy_type: String) -> Dictionary:
 	return _traits.get(enemy_type, {})
+
+# --- Mapas ------------------------------------------------------------------
+
+## id -> nombre para mostrar, con la arena del juego base siempre primera.
+func maps_available() -> Dictionary:
+	var out := {"": String(MapProfile.DEFECTO["name"])}
+	for id: String in _maps:
+		out[id] = String((_maps[id] as Dictionary).get("name", id))
+	return out
+
+## El perfil que tiene que usar `world.gd`. Si el mapa elegido ya no existe (el
+## jugador apagó o borró ese mod), se cae al del juego base en vez de romper.
+func map_profile() -> Dictionary:
+	return _maps.get(map_seleccionado(), MapProfile.DEFECTO)
+
+## `--map=<id>` pisa lo guardado, para que las herramientas de tools/ puedan probar
+## un mapa sin escribirle la configuración al jugador. Mismo criterio que `--mods=`.
+func map_seleccionado() -> String:
+	for a in OS.get_cmdline_user_args():
+		var s := String(a)
+		if s.begins_with("--map="):
+			return s.substr(6)
+	return Config.map_id
+
+func set_map(id: String) -> void:
+	Config.map_id = id if _maps.has(id) else ""
+	Config.save_config()
 
 func has_any() -> bool:
 	return not entries.is_empty()

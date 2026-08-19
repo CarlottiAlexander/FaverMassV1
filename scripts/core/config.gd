@@ -20,6 +20,8 @@ var fullscreen := false
 ## propósito: así un mod recién copiado a la carpeta arranca habilitado, sin que
 ## haya que entrar al menú a prenderlo. La lista es sólo de excepciones.
 var mods_disabled: Array = []
+## Id del mapa elegido. Vacio = la arena del juego base.
+var map_id := ""
 
 func _ready() -> void:
 	load_config()
@@ -41,6 +43,7 @@ func load_config() -> void:
 			"mouse_sensitivity": mouse_sensitivity = clampf(value.to_float(), 0.0005, 0.01)
 			"fov": fov = clampf(value.to_float(), FOV_MIN, FOV_MAX)
 			"fullscreen": fullscreen = value == "true"
+			"map": map_id = value
 			# Lista separada por comas. Un id vacío ensuciaría el filtro, así que
 			# se descartan; y si la clave no está, la lista queda vacía = todo
 			# habilitado, que es el estado correcto para una instalación nueva.
@@ -60,6 +63,7 @@ func save_config() -> void:
 	f.store_line("fov=%s" % fov)
 	f.store_line("fullscreen=%s" % ("true" if fullscreen else "false"))
 	f.store_line("mods_disabled=%s" % ",".join(PackedStringArray(mods_disabled)))
+	f.store_line("map=%s" % map_id)
 
 func apply_fullscreen() -> void:
 	DisplayServer.window_set_mode(

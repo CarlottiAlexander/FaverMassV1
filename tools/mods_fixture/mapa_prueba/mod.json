@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "name": "Catedral en ruinas",
+  "author": "fixture",
+
+  "maps": {
+    "catedral": {
+      "name": "Catedral en ruinas",
+      "arena_radius": 70,
+      "obstacles": { "count": 34, "seed": 7, "size_min": 1.5, "size_max": 9.0, "keep_out": 8.0 },
+      "walls": { "base_height": 4.0, "extra_height": 10.0 },
+      "sky": { "calm_top": [0.02, 0.03, 0.09], "chaos_top": [0.30, 0.02, 0.02] },
+      "fog": { "calm": [0.10, 0.10, 0.16], "chaos": [0.40, 0.10, 0.10], "begin": 26, "end": 40 },
+      "moon": { "enabled": false },
+      "floor": { "color": [0.12, 0.12, 0.14] }
+    }
+  }
+}

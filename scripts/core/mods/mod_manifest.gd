@@ -32,7 +32,7 @@ const CAMPOS_STATS := ["hp", "speed", "damage", "atk_cd", "xp", "regen", "radius
 ## `enemies` es {tipo: {stats, spawn, color, model, opts, preset, declara_color}}.
 static func parse(json_path: String, mod_dir: String) -> Dictionary:
 	var out := {"ok": false, "error": "", "name": "", "author": "", "version": "",
-		"enemies": {}, "warnings": []}
+		"enemies": {}, "maps": {}, "warnings": []}
 
 	var f := FileAccess.open(json_path, FileAccess.READ)
 	if f == null:
@@ -68,8 +68,27 @@ static func parse(json_path: String, mod_dir: String) -> Dictionary:
 	if formato > 1:
 		out["warnings"].append("hecho para un formato más nuevo (%d); puede que algo se ignore" % formato)
 
+	# --- mapas ---
+	var mapas := {}
+	var mc = raiz.get("maps", {})
+	if typeof(mc) == TYPE_DICTIONARY:
+		for id: String in mc:
+			if typeof(mc[id]) != TYPE_DICTIONARY:
+				out["warnings"].append("mapa \"%s\": se ignoró, no es un objeto" % id)
+				continue
+			var r := MapProfile.merge(mc[id])
+			for w: String in r["warnings"]:
+				out["warnings"].append("mapa \"%s\": %s" % [id, w])
+			mapas[id] = r["perfil"]
+	out["maps"] = mapas
+
+	# Un mod puede traer SÓLO mapas, sin enemigos. Por eso la exigencia de declarar
+	# enemigos se relaja si trajo al menos un mapa.
 	if not raiz.has("enemies") or typeof(raiz["enemies"]) != TYPE_DICTIONARY:
-		out["error"] = "mod.json no declara ningún enemigo (falta el objeto \"enemies\")"
+		if not mapas.is_empty():
+			out["ok"] = true
+			return out
+		out["error"] = "mod.json no declara ningún enemigo ni mapa"
 		return out
 
 	for tipo: String in raiz["enemies"]:
@@ -85,8 +104,8 @@ static func parse(json_path: String, mod_dir: String) -> Dictionary:
 			continue
 		out["enemies"][tipo] = r["data"]
 
-	if out["enemies"].is_empty():
-		out["error"] = "ningún enemigo del mod.json se pudo usar"
+	if out["enemies"].is_empty() and (out["maps"] as Dictionary).is_empty():
+		out["error"] = "nada del mod.json se pudo usar"
 		return out
 
 	out["ok"] = true

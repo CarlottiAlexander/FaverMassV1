@@ -16,6 +16,9 @@ const AMBAR := Color(0.85, 0.65, 0.2)
 
 var _lista: VBoxContainer
 var _pie: Label
+var _sel_mapa: OptionButton
+## Ids de mapa en el mismo orden que las filas del selector.
+var _ids_mapa: Array = []
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -81,6 +84,22 @@ func _ready() -> void:
 	_lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_lista)
 
+	# Selector de mapa. Va acá abajo y no en Opciones porque los mapas los traen los
+	# mods: si no hay ninguno instalado, sólo aparece "Arena" y la fila no estorba.
+	var fila_mapa := HBoxContainer.new()
+	fila_mapa.add_theme_constant_override("separation", 12)
+	fila_mapa.alignment = BoxContainer.ALIGNMENT_CENTER
+	var lbl_mapa := Label.new()
+	lbl_mapa.text = "Mapa"
+	lbl_mapa.add_theme_font_size_override("font_size", 16)
+	lbl_mapa.add_theme_color_override("font_color", Color(0.85, 0.8, 0.8))
+	fila_mapa.add_child(lbl_mapa)
+	_sel_mapa = OptionButton.new()
+	_sel_mapa.custom_minimum_size = Vector2(300, 0)
+	_sel_mapa.item_selected.connect(_on_mapa_elegido)
+	fila_mapa.add_child(_sel_mapa)
+	col.add_child(fila_mapa)
+
 	_pie = Label.new()
 	_pie.add_theme_font_size_override("font_size", 13)
 	_pie.add_theme_color_override("font_color", AMBAR)
@@ -113,12 +132,39 @@ func refrescar() -> void:
 		vacio.add_theme_color_override("font_color", GRIS)
 		vacio.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_lista.add_child(vacio)
+		_refrescar_mapas()
 		_pie.text = ""
 		return
 
 	for e: Dictionary in ModManager.entries:
 		_lista.add_child(_fila(e))
+	_refrescar_mapas()
 	_actualizar_pie()
+
+## El mapa se aplica al empezar partida, igual que el resto: `world.gd` genera la
+## arena en su `_ready()`, así que cambiarlo con una partida en curso no haría nada
+## salvo desincronizar el radio con lo que ya está en pantalla.
+func _on_mapa_elegido(idx: int) -> void:
+	if idx < 0 or idx >= _ids_mapa.size():
+		return
+	ModManager.set_map(String(_ids_mapa[idx]))
+	_actualizar_pie()
+
+func _refrescar_mapas() -> void:
+	if _sel_mapa == null:
+		return
+	_sel_mapa.clear()
+	_ids_mapa.clear()
+	var disp: Dictionary = ModManager.maps_available()
+	var i := 0
+	for id: String in disp:
+		_sel_mapa.add_item(String(disp[id]))
+		_ids_mapa.append(id)
+		if id == Config.map_id:
+			_sel_mapa.select(i)
+		i += 1
+	# Con un solo mapa el selector no aporta nada y sólo ocupa lugar.
+	_sel_mapa.get_parent().visible = _ids_mapa.size() > 1
 
 func _actualizar_pie() -> void:
 	if ModManager.pending:

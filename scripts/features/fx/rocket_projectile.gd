@@ -35,7 +35,7 @@ func _physics_process(delta: float) -> void:
 		return
 	global_position = next_pos
 	_prev_pos = next_pos
-	if life <= 0.0 or global_position.length() > GameData.ARENA_RADIUS * 2.0 or global_position.y < -5.0:
+	if life <= 0.0 or global_position.length() > GameData.arena_radius * 2.0 or global_position.y < -5.0:
 		_explode()
 
 func _sweep(from: Vector3, to: Vector3) -> void:
