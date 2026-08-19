@@ -18,7 +18,9 @@ for %%e in (godot.exe godot4.exe) do (
 )
 if defined GODOT goto :verificar
 
-rem --- 3. Ubicaciones habituales. Gana el primer Godot_v*win64.exe que aparezca.
+rem --- 3. Ubicaciones habituales. /o-n ordena por nombre al reves, asi que si
+rem     hay varias versiones al lado gana la mas nueva. Ojo: es orden de texto,
+rem     o sea que un dia 4.9 le va a ganar a 4.10; ahi definir GODOT a mano.
 rem     Se descartan los _console.exe: abren una consola de mas al lado del juego.
 for %%d in (
     "%~dp0..\Tools\Godot"
@@ -27,7 +29,7 @@ for %%d in (
     "%ProgramFiles%\Godot"
 ) do (
     if not defined GODOT (
-        for /f "delims=" %%f in ('dir /b /a-d "%%~d\Godot_v*win64.exe" 2^>nul ^| findstr /v /i "_console"') do (
+        for /f "delims=" %%f in ('dir /b /a-d /o-n "%%~d\Godot_v*win64.exe" 2^>nul ^| findstr /v /i "_console"') do (
             if not defined GODOT set "GODOT=%%~d\%%f"
         )
     )
@@ -36,6 +38,18 @@ for %%d in (
 :verificar
 if not defined GODOT goto :nohay
 if not exist "%GODOT%" goto :nohay
+
+rem --- Los class_name globales viven en una cache que escribe el editor, y que
+rem     esta gitignoreada. En un clon fresco no existe, y arrancar el juego
+rem     directo tira "Parse Error: Could not find type ...". Una pasada de
+rem     --import la genera. Solo se hace cuando falta o quedo vacia.
+set "CACHE=%~dp0.godot\global_script_class_cache.cfg"
+set "TAM=0"
+if exist "%CACHE%" for %%s in ("%CACHE%") do set "TAM=%%~zs"
+if %TAM% LSS 32 (
+    echo Importando recursos por primera vez. Puede tardar unos minutos...
+    "%GODOT%" --headless --path "%~dp0." --import
+)
 
 echo Motor: %GODOT%
 rem "%~dp0." = la carpeta de este .bat. El punto final es a proposito: %~dp0 ya
@@ -52,7 +66,7 @@ echo Definir la ruta una sola vez con:
 echo    setx GODOT "C:\ruta\a\Godot.exe"
 echo o dejar el ejecutable en Tools\Godot\ al lado de la carpeta del proyecto.
 echo.
-echo El proyecto declara Godot 4.6 ^(config/features en project.godot^).
+echo El proyecto declara Godot 4.7 ^(config/features en project.godot^).
 echo Descarga: https://godotengine.org/download  ^(build estandar, NO la .NET^)
 pause
 exit /b 1
