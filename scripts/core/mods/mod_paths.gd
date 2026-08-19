@@ -13,8 +13,8 @@ const LEEME := """CARPETA DE MODS DE FAVER MASS
 
 Todo lo que pongas acá adentro lo carga el juego al arrancar.
 
-CAMBIAR EL MODELO DE UN ENEMIGO
--------------------------------
+LO MAS FACIL: CAMBIAR EL MODELO DE UN ENEMIGO
+---------------------------------------------
 Crea una carpeta con el nombre que quieras y adentro otra llamada
 "reemplazos". Pone ahi un .glb con el nombre del enemigo:
 
@@ -35,6 +35,75 @@ ningun numero que configurar.
 
 Lo que NO cambia es el comportamiento: si reemplazas al Hollow, tu bicho
 va a perseguirte igual que un Hollow. Es un cambio de piel.
+
+CREAR UN ENEMIGO NUEVO
+----------------------
+Para algo mas que cambiar la piel, pone un archivo "mod.json" en tu carpeta:
+
+    mods/
+      mi_pack/
+        mod.json
+        modelos/
+          goblin.glb
+
+Y adentro del mod.json:
+
+    {
+      "format": 1,
+      "name": "Goblins de Fulano",
+      "author": "fulano",
+
+      "enemies": {
+        "goblin": {
+          "name": "Goblin",
+          "model": "modelos/goblin.glb",
+
+          "hp": 60, "speed": 6.0, "damage": 9, "atk_cd": 0.8,
+          "xp": 6, "regen": 1.5,
+          "radius": 0.40, "height": 1.80, "head_radius": 0.24,
+          "flying": false,
+          "color": [0.25, 0.60, 0.20],
+
+          "spawn": { "min_wave": 3, "share": 0.12, "flat": 1 },
+          "preset": "chaser"
+        }
+      }
+    }
+
+Lo UNICO obligatorio es "model". Todo lo demas tiene valor por defecto.
+
+Si usas un nombre de enemigo que ya existe (por ejemplo "hollow"), lo estas
+REEMPLAZANDO: se pisan solo los campos que declares y el resto queda como
+estaba.
+
+CUANDO APARECE Y CUANTOS ("spawn")
+    min_wave   desde que oleada puede aparecer
+    share      cuantos, en proporcion al tamano de la oleada (0.12 = 12%)
+    flat       cuantos fijos, siempre
+    rand       [min, max] cuantos al azar, ej. [2, 4]
+    step       se multiplica por (1 + oleada/step). Ojo que crece rapido.
+    dist       [min, max] a que distancia del jugador nace
+
+COMO SE COMPORTA ("preset") — uno de estos siete:
+    chaser     va derecho al jugador (por defecto)
+    flyer      igual pero volando
+    weaver     zigzaguea mientras persigue
+    wobbler    vuela tambaleandose
+    brute      embiste cada tantos segundos y agarra a otros enemigos
+    stalker    se queda quieto hasta que lo miras, despues carga y salta
+    orbiter    se acerca y orbita alrededor tuyo
+
+No se puede escribir comportamiento propio: los mods NO ejecutan codigo.
+
+SI TU MODELO NO SE VE BIEN
+--------------------------
+    "model_yaw": 0          si camina de espaldas (por defecto 180)
+    "hitbox": { "shape": "sphere" }     o "capsule", o "auto"
+    "head": { "keywords": ["cabeza"], "bone": "mixamorig:Head" }
+        si el juego no encuentra la cabeza para los headshots
+    "anim": { "idle": "Idle", "run": ["Correr", "Walk"], "attack": "Morder" }
+        si tus animaciones se llaman distinto. El juego intenta adivinarlas
+        por nombre, asi que muchas veces no hace falta.
 
 QUE PASA SI ALGO SALE MAL
 -------------------------
