@@ -28,7 +28,16 @@ const DEFECTO := {
 	"fog": {"calm": [0.15, 0.08, 0.12], "chaos": [0.34, 0.13, 0.11], "begin": 20.0, "end": 30.0},
 	"moon": {"enabled": true},
 	"floor": {"color": []},
+	## El modo de juego que trae el mapa. Vacío = el de siempre (oleadas infinitas).
+	## `waves` es declarativo A PROPÓSITO: el menú puede decir "este mapa no tiene
+	## oleadas" sin ejecutar nada, y el runner puede apagarlas antes del primer
+	## frame aunque el modo no se pueda cargar.
+	"mode": {},
 }
+
+## Modos que shippeamos nosotros. Se valida acá para que un `builtin` mal escrito
+## se avise al cargar el mod y no falle en silencio al empezar la partida.
+const BUILTIN_VALIDOS := ["survival", "waves10"]
 
 ## Rangos de validación. `arena_radius` tiene tope real: el spawn nace a 40-58 m
 ## del jugador y recorta contra el borde, así que una arena de 15 m dejaría a los
@@ -87,6 +96,10 @@ static func merge(crudo: Dictionary) -> Dictionary:
 	if typeof(floor_c) == TYPE_DICTIONARY and floor_c.has("color"):
 		(p["floor"] as Dictionary)["color"] = _rgb(floor_c["color"], [])
 
+	var modo = crudo.get("mode", {})
+	if typeof(modo) == TYPE_DICTIONARY and not (modo as Dictionary).is_empty():
+		p["mode"] = _modo(modo, avisos)
+
 	# Coherencias que si no explotan más adelante y son dificilísimas de atribuir.
 	var ob: Dictionary = p["obstacles"]
 	if float(ob["size_min"]) > float(ob["size_max"]):
@@ -101,6 +114,37 @@ static func merge(crudo: Dictionary) -> Dictionary:
 		fg["end"] = float(fg["begin"]) + 10.0
 
 	return {"perfil": p, "warnings": avisos}
+
+## Normaliza el modo declarado por el mapa. Nada de acá ejecuta código: es sólo
+## qué modo built-in usar, con qué parámetros y si hay oleadas.
+static func _modo(m: Dictionary, avisos: Array) -> Dictionary:
+	var out := {
+		"name": String(m.get("name", "")),
+		"description": String(m.get("description", "")),
+		"waves": bool(m.get("waves", true)),
+		"builtin": String(m.get("builtin", "survival")),
+		"params": {},
+	}
+	if not BUILTIN_VALIDOS.has(out["builtin"]):
+		avisos.append("el modo \"%s\" no existe (hay: %s); se usa survival" % [
+			out["builtin"], ", ".join(PackedStringArray(BUILTIN_VALIDOS))])
+		out["builtin"] = "survival"
+
+	# Los parámetros llegan tal cual al modo, así que sólo se aceptan escalares y
+	# listas: un diccionario anidado sin límite es una puerta a datos raros.
+	var ps = m.get("params", {})
+	if typeof(ps) == TYPE_DICTIONARY:
+		for k: String in ps:
+			var v = ps[k]
+			var t := typeof(v)
+			if t == TYPE_FLOAT or t == TYPE_INT or t == TYPE_BOOL or t == TYPE_STRING or t == TYPE_ARRAY:
+				(out["params"] as Dictionary)[k] = v
+			else:
+				avisos.append("el parámetro \"%s\" del modo se ignoró (tipo no admitido)" % k)
+
+	if out["name"] == "":
+		out["name"] = out["builtin"]
+	return out
 
 static func _num(v, clave: String, avisos: Array) -> float:
 	var f := float(v)

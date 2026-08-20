@@ -35,6 +35,15 @@ func _ready() -> void:
 	_players = get_tree().get_nodes_in_group("player")
 
 	api = ModeApi.new(self)
+
+	# Las oleadas se apagan ANTES de cargar el modo, y por el dato declarativo del
+	# mapa. Así el mapa se comporta como promete aunque el modo no se pueda cargar
+	# — y el WaveManager arranca con `announce_timer = 2.0`, así que llegamos a
+	# tiempo: todavía no lanzó ninguna.
+	var decl: Dictionary = ModManager.map_profile().get("mode", {})
+	if _wm and not bool(decl.get("waves", true)):
+		_wm.enabled = false
+
 	_cargar()
 	if mode:
 		add_child(mode)

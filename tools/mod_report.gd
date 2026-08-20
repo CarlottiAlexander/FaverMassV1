@@ -79,7 +79,31 @@ func _print_mod(e: Dictionary) -> void:
 				print("      rasgos: %s" % ", ".join(PackedStringArray(partes)))
 		if String(d.get("model", "")) != "":
 			_print_model(t, d["model"])
+
+	for mid: String in (e.get("maps", {}) as Dictionary):
+		_print_map(mid, e["maps"][mid])
 	print("")
+
+## Qué trae un mapa: la arena y —lo nuevo— a qué se juega en él.
+func _print_map(id: String, p: Dictionary) -> void:
+	print("  --- mapa \"%s\": %s" % [id, p.get("name", id)])
+	print("      arena radio %.0f   obstáculos %d (semilla %d)   muros %.1f+%.1f" % [
+		float(p.get("arena_radius", 0.0)),
+		int((p.get("obstacles", {}) as Dictionary).get("count", 0)),
+		int((p.get("obstacles", {}) as Dictionary).get("seed", 0)),
+		float((p.get("walls", {}) as Dictionary).get("base_height", 0.0)),
+		float((p.get("walls", {}) as Dictionary).get("extra_height", 0.0))])
+	var m: Dictionary = p.get("mode", {})
+	if m.is_empty():
+		print("      modo: (ninguno) -> oleadas infinitas, se termina al morir")
+		return
+	print("      modo: %s  [%s]%s" % [
+		m.get("name", "?"), m.get("builtin", "survival"),
+		"   SIN OLEADAS" if not bool(m.get("waves", true)) else ""])
+	if String(m.get("description", "")) != "":
+		print("            \"%s\"" % m["description"])
+	if not (m.get("params", {}) as Dictionary).is_empty():
+		print("            parámetros: %s" % m["params"])
 
 ## Se vuelve a parsear el GLB acá a propósito, en vez de reusar lo que cacheó
 ## ModManager: lo que interesa reportar son los datos CRUDOS del archivo (nombres

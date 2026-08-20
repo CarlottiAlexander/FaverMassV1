@@ -17,6 +17,8 @@ const AMBAR := Color(0.85, 0.65, 0.2)
 var _lista: VBoxContainer
 var _pie: Label
 var _sel_mapa: OptionButton
+## Modo y descripción del mapa elegido, debajo del selector.
+var _desc_mapa: Label
 ## Ids de mapa en el mismo orden que las filas del selector.
 var _ids_mapa: Array = []
 
@@ -100,6 +102,15 @@ func _ready() -> void:
 	fila_mapa.add_child(_sel_mapa)
 	col.add_child(fila_mapa)
 
+	# Qué modo trae el mapa elegido. Es lo que convierte al selector de "dónde se
+	# juega" en "a qué se juega".
+	_desc_mapa = Label.new()
+	_desc_mapa.add_theme_font_size_override("font_size", 13)
+	_desc_mapa.add_theme_color_override("font_color", GRIS)
+	_desc_mapa.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_desc_mapa.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(_desc_mapa)
+
 	_pie = Label.new()
 	_pie.add_theme_font_size_override("font_size", 13)
 	_pie.add_theme_color_override("font_color", AMBAR)
@@ -148,6 +159,7 @@ func _on_mapa_elegido(idx: int) -> void:
 	if idx < 0 or idx >= _ids_mapa.size():
 		return
 	ModManager.set_map(String(_ids_mapa[idx]))
+	_refrescar_desc()
 	_actualizar_pie()
 
 func _refrescar_mapas() -> void:
@@ -160,11 +172,32 @@ func _refrescar_mapas() -> void:
 	for id: String in disp:
 		_sel_mapa.add_item(String(disp[id]))
 		_ids_mapa.append(id)
-		if id == Config.map_id:
+		# `map_seleccionado()` y no `Config.map_id` directo: así el override por
+		# línea de comandos (`--map=`) también queda reflejado en el desplegable, y
+		# el selector no dice una cosa mientras el juego usa otra.
+		if id == ModManager.map_seleccionado():
 			_sel_mapa.select(i)
 		i += 1
 	# Con un solo mapa el selector no aporta nada y sólo ocupa lugar.
 	_sel_mapa.get_parent().visible = _ids_mapa.size() > 1
+	_refrescar_desc()
+
+func _refrescar_desc() -> void:
+	if _desc_mapa == null:
+		return
+	var m: Dictionary = ModManager.map_profile().get("mode", {})
+	if m.is_empty():
+		_desc_mapa.text = ""
+		_desc_mapa.visible = false
+		return
+	var partes: Array = ["Modo: %s" % String(m.get("name", "survival"))]
+	if not bool(m.get("waves", true)):
+		partes.append("sin oleadas")
+	var t := "  —  ".join(PackedStringArray(partes))
+	if String(m.get("description", "")) != "":
+		t += "\n" + String(m["description"])
+	_desc_mapa.text = t
+	_desc_mapa.visible = true
 
 func _actualizar_pie() -> void:
 	if ModManager.pending:
