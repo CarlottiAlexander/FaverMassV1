@@ -260,6 +260,12 @@ static func _opciones_modelo(c: Dictionary) -> Dictionary:
 			o["head_bone"] = String(h["bone"]).to_lower()
 		if h.has("mult"):
 			o["head_mult"] = clampf(float(h["mult"]), 0.1, 4.0)
+		# Desde qué fracción de la altura para arriba cuenta como cabeza, cuando no
+		# se pudo medir una esfera. 0.85 = el 15% superior (el default del juego).
+		# Es la perilla que de verdad sirve para los modelos de la comunidad: casi
+		# ninguno tiene una submalla de cabeza que aislar.
+		if h.has("band"):
+			o["head_band"] = clampf(float(h["band"]), 0.3, 0.98)
 		if h.has("use_torso_floor"):
 			o["head_torso_floor"] = bool(h["use_torso_floor"])
 

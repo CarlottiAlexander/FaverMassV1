@@ -155,8 +155,15 @@ SI TU MODELO NO SE VE BIEN
 --------------------------
     "model_yaw": 0          si camina de espaldas (por defecto 180)
     "hitbox": { "shape": "sphere" }     o "capsule", o "auto"
+    "head": { "band": 0.72 }
+        DESDE QUE ALTURA cuenta como cabeza, de 0.3 a 0.98. Por defecto 0.85,
+        o sea el 15% de arriba. Es la perilla que vas a necesitar de verdad:
+        casi todos los packs exportan UNA sola malla por criatura, asi que el
+        juego no puede aislarte la cabeza y usa esta franja. Bajala si tu
+        bicho tiene la cabeza grande, subila si es chiquita.
     "head": { "keywords": ["cabeza"], "bone": "mixamorig:Head" }
-        si el juego no encuentra la cabeza para los headshots
+        solo sirven si tu modelo trae la cabeza como una malla APARTE. Si es
+        una malla sola, usa "band".
     "anim": { "idle": "Idle", "run": ["Correr", "Walk"], "attack": "Morder" }
         si tus animaciones se llaman distinto. El juego intenta adivinarlas
         por nombre, asi que muchas veces no hace falta.

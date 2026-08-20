@@ -788,7 +788,13 @@ func is_headshot_hit(hit_pos: Vector3) -> bool:
 		return hit_pos.distance_to(to_global(head_center)) <= head_hit_radius
 	var bottom := global_position.y - body_height * 0.5
 	var frac := (hit_pos.y - bottom) / body_height
-	return frac >= HEADSHOT_HEIGHT_FRACTION
+	# La franja es configurable por mod (`head.band`) porque para la mayoría de los
+	# modelos de la comunidad es el ÚNICO método disponible: los packs exportan una
+	# malla única por criatura (no hay submalla "cabeza" que aislar) y sus rigs
+	# guardan todos los huesos en el origen. Medido sobre el banco de 45 monstruos:
+	# ninguno permite ubicar la cabeza ni por malla ni por hueso.
+	# El default es el de siempre, así que los 8 base no cambian.
+	return frac >= float(model_opts.get("head_band", HEADSHOT_HEIGHT_FRACTION))
 
 func is_headshot_immune() -> bool:
 	return enemy_type == "knight" or is_alpha or EnemyTraits.has(self, "headshot_immune")
