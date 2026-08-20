@@ -23,6 +23,8 @@ var weapon_ammo_fill: ColorRect
 var weapon_ammo_label: Label
 var wave_label: Label
 var enemies_label: Label
+## Línea del objetivo del modo de juego, debajo del contador de enemigos.
+var objective_label: Label
 var kills_label: Label
 var kill_feed_container: VBoxContainer
 var wave_announce_label: Label
@@ -38,6 +40,9 @@ const HEALTH_BAR_H := 18.0
 const ECSTASY_BAR_H := 14.0
 
 func _ready() -> void:
+	# El modo de juego lo encuentra por grupo (`ModeApi.hud()`), sin que `ui.gd`
+	# tenga que inyectarle otra referencia.
+	add_to_group("hud")
 	# `set_anchors_and_offsets_preset` y NO `set_anchors_preset`: cuando el control
 	# YA está en el árbol, `set_anchors_preset` recalcula los offsets para conservar
 	# el rectángulo actual, y como acá el rectángulo todavía es de tamaño 0 el
@@ -69,6 +74,13 @@ func _process(delta: float) -> void:
 		enemies_label.text = "Enemies: %d" % wave_manager.alive_count
 
 	kills_label.text = "Kills: %d   Headshots: %d" % [GameState.run_kills, GameState.run_headshots]
+
+	# Lo que pisa el modo de juego. Se resuelve acá, en `_process`, siguiendo el
+	# mismo criterio que `kills_label`: leer estado global sin señal de por medio.
+	if mode_wave_text != "":
+		wave_label.text = mode_wave_text
+	objective_label.text = mode_objective
+	objective_label.visible = mode_objective != ""
 
 	if wave_announce_timer > 0.0:
 		wave_announce_timer -= delta
@@ -172,6 +184,9 @@ func _build() -> void:
 	# Info de oleada
 	wave_label = UILayout.label("WAVE 0", Control.PRESET_TOP_LEFT, 20, 20, 300, 40, 28)
 	add_child(wave_label)
+	objective_label = UILayout.label("", Control.PRESET_TOP_LEFT, 20, 82, 420, 24, 16, Color(0.9, 0.78, 0.35))
+	objective_label.visible = false
+	add_child(objective_label)
 	enemies_label = UILayout.label("Enemies: 0", Control.PRESET_TOP_LEFT, 20, 58, 300, 24, 16, Color(0.8, 0.8, 0.8))
 	add_child(enemies_label)
 
@@ -282,9 +297,20 @@ func update_weapon() -> void:
 			weapon_ammo_fill.color = Color(0.7, 0.7, 0.2)
 
 func update_wave() -> void:
-	if not wave_manager:
+	if not wave_manager or mode_wave_text != "":
 		return
 	wave_label.text = "WAVE %d" % wave_manager.wave
+
+# --- Lo que controla el modo de juego ---------------------------------------
+## Vacíos = el HUD de siempre. Los escribe `ModeApi`.
+var mode_objective := ""
+var mode_wave_text := ""
+
+## Reusa el cartel del anuncio de oleada, que es un slot ÚNICO: un anuncio nuevo
+## pisa al anterior y reinicia el temporizador, no se encola.
+func mode_announce(texto: String, seg := 2.0) -> void:
+	wave_announce_label.text = texto
+	wave_announce_timer = seg
 
 func on_hit_confirmed(is_headshot: bool) -> void:
 	crosshair.flash(is_headshot)

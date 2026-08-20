@@ -38,14 +38,17 @@ func _ready() -> void:
 	_generate_obstacles()
 	_generate_walls()
 	_generate_sky_rig()
-	# DIFERIDO a propósito. El WaveManager está DESPUÉS de World en main.tscn y se
-	# mete en su grupo recién en su propio _ready, así que buscarlo acá devolvía
-	# una lista VACÍA y la conexión no se hacía nunca: el mundo jamás reaccionaba
-	# al chaos_level. Ni el cielo, ni la niebla, ni la luna, ni los escombros, ni
-	# la altura del muro — todo se quedaba en el estado de oleada 0 para siempre.
-	# Se descubrió midiendo el muro en oleada 26: seguía en 3 m en vez de 8.
-	_connect_wave_manager.call_deferred()
-	_on_chaos_changed(0.0)
+	# El caos vive en el autoload `GameState`, que SIEMPRE existe.
+	#
+	# ANTES se buscaba al WaveManager por grupo y había que diferir la conexión,
+	# porque está DESPUÉS de World en main.tscn y todavía no se había metido en su
+	# grupo: la lista salía vacía, la conexión no se hacía NUNCA, y el mundo se
+	# quedaba en estado de oleada 0 para siempre — sin cielo rojo, sin niebla
+	# espesa, sin luna y con los muros bajos. Ese bug vivió toda la vida del
+	# proyecto y se descubrió midiendo el muro en la oleada 26. Con un autoload no
+	# puede volver a pasar, y además un modo sin oleadas puede manejar la atmósfera.
+	GameState.chaos_changed.connect(_on_chaos_changed)
+	_on_chaos_changed(GameState.chaos_level)
 
 ## El piso vive en `main.tscn`, no acá, así que se resuelve por la escena actual —
 ## mismo patrón que `world_environment`.
@@ -100,11 +103,6 @@ func _apply_fog() -> void:
 	env.fog_depth_begin = float(fg["begin"])
 	env.fog_depth_end = float(fg["end"])
 	GameData.enemy_lod_distance = float(fg["end"]) + 2.0
-
-func _connect_wave_manager() -> void:
-	var wms := get_tree().get_nodes_in_group("wave_manager")
-	if wms.size() > 0:
-		wms[0].chaos_changed.connect(_on_chaos_changed)
 
 func _generate_obstacles() -> void:
 	var root := Node3D.new()

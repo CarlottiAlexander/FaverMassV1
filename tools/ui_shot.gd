@@ -40,6 +40,11 @@ func _run() -> void:
 	GameState.change_state(GameState.State.PAUSED)
 	await _shot("pausa")
 
+	# La pantalla de VICTORIA, que es lo que la etapa de modos agrega. Se fuerza a
+	# mano: llegar jugando llevaría diez oleadas.
+	GameState.end_run(true, "VICTORIA", "Aguantaste las 10 oleadas.", ["Oleadas completadas: 10"])
+	await _shot("victoria")
+
 	get_tree().quit()
 
 func _shot(name: String) -> void:

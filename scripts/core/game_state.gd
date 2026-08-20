@@ -4,7 +4,9 @@ extends Node
 
 ## MODS es una pantalla superpuesta igual que OPTIONS: se abre desde el título o
 ## desde la pausa y vuelve a donde se abrió.
-enum State { TITLE, PLAYING, PAUSED, OPTIONS, DEAD, MODS }
+## WON es terminal igual que DEAD. `change_state()` pausa el árbol para todo lo que
+## no sea PLAYING, así que la victoria congela el juego sola.
+enum State { TITLE, PLAYING, PAUSED, OPTIONS, DEAD, MODS, WON }
 
 var state: int = State.TITLE
 ## A dónde vuelve la pantalla superpuesta que esté abierta (Opciones o Mods). Es
@@ -66,7 +68,7 @@ func start_run() -> void:
 	# Los cambios de mods se aplican ACÁ y no en caliente: un enemigo vivo ya
 	# resolvió su modelo y su hitbox en su `_ready()`, así que cambiarle el registro
 	# debajo lo deja inconsistente. Empezar partida es el único momento seguro.
-	ModManager.commit_if_needed()
+	var cambio := ModManager.commit_if_needed()
 	run_wave = 0
 	run_kills = 0
 	run_headshots = 0
@@ -75,7 +77,50 @@ func start_run() -> void:
 	wave_speed_mult = 1.0
 	wave_damage_mult = 1.0
 	wave_surplus = 1.0
+	run_result = {}
+	# `chaos_level` es de un autoload: sobrevive al reinicio de escena. Sin
+	# resetearlo, una partida nueva arrancaba con el cielo rojo de la anterior.
+	chaos_level = 0.0
 	change_state(State.PLAYING)
+
+	# El mundo se arma en `world._ready()`, que corre UNA vez al arrancar el motor.
+	# El botón "Jugar" del título no recargaba la escena, así que elegir un mapa y
+	# darle a Jugar NO aplicaba el mapa: recién entraba al morir una vez o al
+	# reiniciar el juego. Los mods de enemigos sí funcionaban por ese camino
+	# (se leen al spawnear); el mapa no, porque la arena ya estaba construida.
+	if cambio:
+		get_tree().reload_current_scene()
+
+## Único árbitro del fin de partida. Hasta ahora sólo se salía muriendo, y la
+## transición estaba enterrada en `player._die()`; ahora hay un solo lugar que
+## decide y que sabe si se ganó o se perdió.
+##
+## `stats` son filas extra que el modo quiera mostrar en la pantalla final.
+func end_run(win: bool, titulo := "", detalle := "", stats: Array = []) -> void:
+	if state == State.DEAD or state == State.WON:
+		return   # ya terminó; un modo que llama dos veces no rompe nada
+	run_result = {"win": win, "titulo": titulo, "detalle": detalle, "stats": stats}
+	change_state(State.WON if win else State.DEAD)
+
+## Resultado de la partida terminada, para la pantalla final.
+var run_result: Dictionary = {}
+
+# --- Caos / atmósfera -------------------------------------------------------
+## Cuán infernal se ve el mundo (0..3): cielo, niebla, altura de los muros,
+## escombros y luna. Vivía en `wave_manager` y se emitía por señal, pero eso ataba
+## TODA la atmósfera al número de oleada — un modo sin oleadas dejaba el mundo
+## congelado en 0, que es exactamente el bug que este proyecto sufrió durante toda
+## su vida. Acá es un autoload: siempre existe, y `world.gd` se conecta sin el
+## `call_deferred()` frágil que hacía falta para encontrar al WaveManager.
+var chaos_level := 0.0
+signal chaos_changed(level: float)
+
+func set_chaos(v: float) -> void:
+	var nuevo := clampf(v, 0.0, 3.0)
+	if is_equal_approx(nuevo, chaos_level):
+		return
+	chaos_level = nuevo
+	chaos_changed.emit(nuevo)
 
 func register_kill(is_headshot: bool) -> void:
 	run_kills += 1

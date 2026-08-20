@@ -15,12 +15,21 @@ var total_this_wave := 0
 
 signal wave_changed
 signal wave_announced(wave: int)
-signal chaos_changed(level: float)
+## Se emite cuando la oleada N se dio por TERMINADA. Hasta ahora ese momento
+## ocurría en silencio y no había forma de que otro sistema se enterara.
+## Ojo: termina con hasta un 20% de enemigos todavía vivos — las oleadas se
+## solapan a propósito.
+signal wave_cleared(wave: int)
+
+## Un modo de juego puede apagar las oleadas por completo y spawnear por su cuenta.
+var enabled := true
 
 func _ready() -> void:
 	add_to_group("wave_manager")
 
 func _process(delta: float) -> void:
+	if not enabled:
+		return
 	if not wave_active:
 		announce_timer -= delta
 		if announce_timer <= 0.0:
@@ -41,6 +50,9 @@ func _process(delta: float) -> void:
 	if spawn_queue.is_empty() and alive_count <= max(0, int(total_this_wave * 0.2)):
 		wave_active = false
 		announce_timer = 1.5
+		# Esta rama sólo se alcanza con `wave_active == true`, así que la señal sale
+		# una sola vez por oleada. Con cero listeners en el juego base es un no-op.
+		wave_cleared.emit(wave)
 
 func start_wave() -> void:
 	wave += 1
@@ -70,7 +82,9 @@ func start_wave() -> void:
 
 	wave_changed.emit()
 	wave_announced.emit(wave)
-	chaos_changed.emit(GameData.chaos_level(wave))
+	# Mismo valor, mismo momento, misma fórmula que antes — pero ahora vive en un
+	# autoload, así que un modo sin oleadas también puede manejar la atmósfera.
+	GameState.set_chaos(GameData.chaos_level(wave))
 
 func _spawn_next() -> void:
 	if not enemy_scene or spawn_queue.is_empty():
@@ -130,10 +144,20 @@ func _spawn_next() -> void:
 			pos.z = flat.y
 
 	pos.y = randf_range(2.0, 5.0) if GameData.enemy_stats_of(etype).get("flying", false) else 0.3
+	spawn_at(etype, pos, is_alpha)
 
+## Instancia un enemigo en una posición YA decidida y lo cuenta para la oleada.
+##
+## Sale de `_spawn_next()` para que un modo de juego pueda spawnear sin pasar por
+## el cálculo de posición, que es relativo al jugador y además aborta si no hay
+## ninguno — inservible para un modo con spawns guionados.
+func spawn_at(etype: String, pos: Vector3, is_alpha := false, cuenta := true) -> Node:
+	if not enemy_scene:
+		return null
 	var e = enemy_scene.instantiate()
 	e.enemy_type = etype
 	e.is_alpha = is_alpha
+	e.counts_for_wave = cuenta
 	get_tree().current_scene.add_child(e)
 	# El origen del enemigo es el CENTRO de su forma de colisión, así que apoyarlo
 	# en el piso es medio cuerpo — no 0.3. Con 0.3 un Hollow (2.35 de alto) nacía
@@ -143,8 +167,12 @@ func _spawn_next() -> void:
 	if not GameData.enemy_stats_of(etype).get("flying", false):
 		pos.y = e.body_height * 0.5 + 0.05
 	e.global_position = pos
-	alive_count += 1
-	e.died.connect(func(_p, _d, _h): _on_enemy_died())
+	# Sólo cuenta para terminar la oleada lo que la oleada mandó. Lo que invoca un
+	# modo o un rasgo no debe impedir que la oleada termine.
+	if cuenta:
+		alive_count += 1
+		e.died.connect(func(_p, _d, _h): _on_enemy_died())
+	return e
 
 func _on_enemy_died() -> void:
 	alive_count -= 1

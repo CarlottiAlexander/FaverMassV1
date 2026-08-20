@@ -13,8 +13,11 @@ var title_panel: Control
 var pause_panel: Control
 var options_panel: Control
 var mods_panel: Control
+## El panel de muerte pasó a ser el de RESULTADO: sirve para ganar y para perder.
 var death_panel: Control
 var death_stats_label: Label
+## Cambia entre "YOU DIED" en rojo y el título de victoria en dorado.
+var death_title: Label
 var title_logo: Label
 var title_pulse_t := 0.0
 
@@ -44,7 +47,7 @@ func apply_state(new_state: int) -> void:
 	pause_panel.visible = new_state == GameState.State.PAUSED
 	options_panel.visible = new_state == GameState.State.OPTIONS
 	mods_panel.visible = new_state == GameState.State.MODS
-	death_panel.visible = new_state == GameState.State.DEAD
+	death_panel.visible = new_state == GameState.State.DEAD or new_state == GameState.State.WON
 
 	# Se re-lee la carpeta al abrir: si el jugador copió un mod con el juego ya
 	# abierto (que es lo que va a hacer siempre), lo ve sin reiniciar.
@@ -52,11 +55,24 @@ func apply_state(new_state: int) -> void:
 		ModManager.scan()
 		mods_panel.refrescar()
 
-	if new_state == GameState.State.DEAD:
-		death_stats_label.text = "Oleadas sobrevividas: %d\nKills: %d   Headshots: %d (%.0f%%)\nTiempo vivo: %ds" % [
-			GameState.run_wave, GameState.run_kills, GameState.run_headshots,
-			GameState.headshot_accuracy(), int(GameState.run_time_alive())
-		]
+	if new_state == GameState.State.DEAD or new_state == GameState.State.WON:
+		var r: Dictionary = GameState.run_result
+		var gano: bool = bool(r.get("win", false))
+		death_title.text = String(r.get("titulo", "")) if String(r.get("titulo", "")) != "" else ("VICTORIA" if gano else "YOU DIED")
+		death_title.add_theme_color_override("font_color",
+			Color(0.95, 0.8, 0.25) if gano else Color(0.85, 0.1, 0.1))
+
+		var lineas: Array = []
+		if String(r.get("detalle", "")) != "":
+			lineas.append(String(r["detalle"]))
+		lineas.append("Oleadas: %d" % GameState.run_wave)
+		lineas.append("Kills: %d   Headshots: %d (%.0f%%)" % [
+			GameState.run_kills, GameState.run_headshots, GameState.headshot_accuracy()])
+		lineas.append("Tiempo: %ds" % int(GameState.run_time_alive()))
+		# Filas que agregó el modo con `api.add_stat`.
+		for s in r.get("stats", []):
+			lineas.append(String(s))
+		death_stats_label.text = "\n".join(PackedStringArray(lineas))
 
 # ---------------------------------------------------------------------------
 # Fábricas
@@ -262,8 +278,8 @@ func _build_death_panel() -> Control:
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(_panel_bg(0.78))
 
-	var title := UILayout.label("YOU DIED", Control.PRESET_CENTER_TOP, -300, 110, 600, 60, 44, Color(0.85, 0.1, 0.1), HORIZONTAL_ALIGNMENT_CENTER)
-	panel.add_child(title)
+	death_title = UILayout.label("YOU DIED", Control.PRESET_CENTER_TOP, -300, 110, 600, 60, 44, Color(0.85, 0.1, 0.1), HORIZONTAL_ALIGNMENT_CENTER)
+	panel.add_child(death_title)
 
 	death_stats_label = UILayout.label("", Control.PRESET_CENTER_TOP, -260, 185, 520, 120, 18, Color(0.8, 0.75, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	panel.add_child(death_stats_label)

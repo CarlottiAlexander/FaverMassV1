@@ -362,11 +362,15 @@ func set_enabled(id: String, enabled: bool) -> void:
 ## La llama `GameState.start_run()`. Si nadie tocó nada no hace nada: volver a
 ## parsear todos los GLB al empezar cada partida sería pagar el arranque de nuevo
 ## sin motivo.
-func commit_if_needed() -> void:
+## Devuelve `true` si de verdad hubo un cambio. `GameState.start_run()` lo usa para
+## decidir si recarga la escena: el mapa se construye en `world._ready()`, así que
+## sin recarga un mapa recién elegido no se aplicaría.
+func commit_if_needed() -> bool:
 	if not pending:
-		return
+		return false
 	scan()
 	commit()   # deja `pending` en false
+	return true
 
 func _load_disabled() -> void:
 	_disabled.clear()

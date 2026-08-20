@@ -54,4 +54,5 @@ func _ready() -> void:
 func _on_state_changed(new_state: int) -> void:
 	menus.apply_state(new_state)
 	# El HUD se esconde en cualquier pantalla superpuesta, no sólo en Opciones.
-	hud.visible = new_state == GameState.State.PLAYING or new_state == GameState.State.PAUSED or new_state == GameState.State.DEAD
+	hud.visible = new_state == GameState.State.PLAYING or new_state == GameState.State.PAUSED \
+		or new_state == GameState.State.DEAD or new_state == GameState.State.WON

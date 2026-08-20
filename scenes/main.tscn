@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/features/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/features/waves/wave_manager.gd" id="2_wave"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="3_enemy_scene"]
 [ext_resource type="Script" path="res://scripts/features/ui/ui.gd" id="4_ui"]
 [ext_resource type="Script" path="res://scripts/features/world/world.gd" id="5_world"]
+[ext_resource type="Script" path="res://scripts/features/modes/mode_runner.gd" id="6_mode"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.05, 0.03, 0.08, 1)
@@ -128,6 +129,9 @@ fov = 90.0
 [node name="WaveManager" type="Node" parent="."]
 script = ExtResource("2_wave")
 enemy_scene = ExtResource("3_enemy_scene")
+
+[node name="ModeRunner" type="Node" parent="."]
+script = ExtResource("6_mode")
 
 [node name="UI" type="CanvasLayer" parent="."]
 script = ExtResource("4_ui")

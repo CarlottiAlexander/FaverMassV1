@@ -29,6 +29,11 @@ var weapon_view: Node3D
 var ballistics: Ballistics
 
 var pitch := 0.0
+## Qué jugador es, para el día que haya más de uno. Hoy siempre 0. Está desde ya
+## porque la API de modos lo lleva en todas sus firmas: agregarlo ahora cuesta
+## cero, y cambiarlas después rompería todos los mods publicados.
+var slot := 0
+
 var health := GameData.MAX_HEALTH
 var ecstasy := 0.0
 var dead := false
@@ -360,8 +365,17 @@ func take_damage(amount: float, attacker_pos: Vector3 = Vector3.ZERO) -> void:
 
 func _die() -> void:
 	dead = true
+	# La señal existía desde siempre y no tenía un solo listener; ahora es el
+	# aviso que le llega al modo de juego.
 	died.emit()
-	GameState.change_state(GameState.State.DEAD)
+
+	# Un modo puede quedarse con la muerte (respawn, vidas) devolviendo `true`.
+	# Si nadie se hace cargo, se pierde la partida, que es lo de toda la vida.
+	var runners := get_tree().get_nodes_in_group("mode_runner")
+	if runners.size() > 0 and runners[0].handle_player_death(slot):
+		return
+
+	GameState.end_run(false)
 
 func grant_kill_reward(xp: int, regen: float, enemy_type: String = "", is_headshot: bool = false, is_alpha: bool = false) -> void:
 	ecstasy = min(GameData.MAX_ECSTASY, ecstasy + xp)

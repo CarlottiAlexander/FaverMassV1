@@ -873,6 +873,15 @@ func _die(is_headshot: bool, hit_from: Vector3) -> void:
 	# Va antes del queue_free(): los traits que invocan o explotan necesitan la
 	# posición del enemigo y el árbol todavía vivo.
 	EnemyTraits.on_death(self)
+
+	# Aviso al modo de juego. Va por grupo y no por señal porque el modo se crea
+	# después que muchos enemigos y conectarse a cada uno sería peor.
+	var runners := get_tree().get_nodes_in_group("mode_runner")
+	if runners.size() > 0:
+		runners[0].notify_enemy_died({
+			"type": enemy_type, "position": global_position,
+			"is_headshot": is_headshot, "is_alpha": is_alpha})
+
 	died.emit(global_position, from_dir, is_headshot)
 	queue_free()
 
