@@ -65,6 +65,26 @@ func save_config() -> void:
 	f.store_line("mods_disabled=%s" % ",".join(PackedStringArray(mods_disabled)))
 	f.store_line("map=%s" % map_id)
 
+## Vuelca los volúmenes guardados a los buses.
+##
+## BUG QUE ARREGLA: esto no existía. El slider escribía el bus al moverse
+## (`menus.gd`), pero al arrancar nadie aplicaba lo guardado — quien dejaba el
+## volumen en 0.2 y reabría el juego arrancaba al máximo. Era invisible sólo
+## porque no había audio.
+##
+## Y `sfx_volume` era una variable MUERTA: se declaraba, se leía, se guardaba, el
+## slider la escribía, y no la consumía nadie porque no existía el bus de efectos.
+func apply_volume() -> void:
+	_set_bus("Master", master_volume)
+	_set_bus("SFX", sfx_volume)
+
+func _set_bus(nombre: String, v: float) -> void:
+	var idx := AudioServer.get_bus_index(nombre)
+	if idx == -1:
+		return
+	# `linear_to_db(0)` es -inf y Godot lo rechaza; el piso hace de silencio.
+	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(v, 0.0001)))
+
 func apply_fullscreen() -> void:
 	DisplayServer.window_set_mode(
 		DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED

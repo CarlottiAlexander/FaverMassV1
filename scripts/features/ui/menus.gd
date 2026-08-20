@@ -211,13 +211,17 @@ func _build_options_panel() -> Control:
 	vbox.add_theme_constant_override("separation", 18)
 	center.add_child(vbox)
 
+	# Los dos sliders pasan por `Config.apply_volume()`, que es el único lugar que
+	# sabe traducir volumen a bus. Antes el maestro tocaba el AudioServer acá mismo
+	# (era la única línea de audio del proyecto) y el de efectos no hacía nada.
 	vbox.add_child(_build_slider_row("Volumen Maestro", 0.0, 1.0, Config.master_volume, func(v):
 		Config.master_volume = v
-		AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), linear_to_db(max(v, 0.0001)))
+		Config.apply_volume()
 		Config.save_config()
 	))
 	vbox.add_child(_build_slider_row("Volumen de Efectos", 0.0, 1.0, Config.sfx_volume, func(v):
 		Config.sfx_volume = v
+		Config.apply_volume()
 		Config.save_config()
 	))
 	vbox.add_child(_build_slider_row("Sensibilidad del Mouse", 0.0005, 0.01, Config.mouse_sensitivity, func(v):

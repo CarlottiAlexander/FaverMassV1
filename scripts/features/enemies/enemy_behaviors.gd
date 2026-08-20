@@ -262,4 +262,5 @@ static func try_melee_attack(e: Enemy) -> void:
 	if e.attack_timer <= 0.0 and e.player.has_method("take_damage"):
 		e.player.take_damage(e.damage, e.global_position)
 		e.attack_timer = e.atk_cd
-		e.play_anim(Enemy.ANIM_ATTACK, false, 1.3)
+		Audio.play_entity(e.enemy_type, "attack", e.global_position, ModManager.sound_volume_of(e.enemy_type))
+	e.play_anim(Enemy.ANIM_ATTACK, false, 1.3)

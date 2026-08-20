@@ -93,4 +93,9 @@ func _run() -> void:
 	print("SOAK ok: %d frames | oleada %d | pico %d enemigos vivos | %d disparos, %d impactos (%.0f%%) | kills %d (headshots %d)" % [
 		FRAMES, wm.wave, peak, shots, tally["hits"], 100.0 * tally["hits"] / maxi(shots, 1),
 		GameState.run_kills, GameState.run_headshots])
+	# El pool de voces es lo único delicado del audio: acá se afirma que aguantó el
+	# combate REAL, no un lote sintético.
+	print("SOAK audio: %d eventos | pico %d voces 3D de %d | %d descartados por intervalo -> %s" % [
+		Audio.eventos, Audio.pico_voces_3d, Audio.VOCES_3D, Audio.descartados,
+		"OK" if Audio.pico_voces_3d <= Audio.VOCES_3D else "SE DESBORDÓ"])
 	get_tree().quit()

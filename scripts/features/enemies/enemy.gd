@@ -823,6 +823,16 @@ func _react_to_hit() -> void:
 	_react_cd = HIT_REACT_COOLDOWN
 	_slow_time = HIT_SLOW_TIME
 	EnemyTraits.on_hit(self)
+
+	# El sonido cuelga de ACÁ y no de `take_damage()` a propósito: este sitio ya
+	# tiene el cooldown de 0.18 s, o sea ~5.5 eventos por segundo por enemigo. En
+	# `take_damage` no habría tope y la Minigun metería 15 por segundo por bicho.
+	Audio.play_entity(enemy_type, "hit", global_position, ModManager.sound_volume_of(enemy_type))
+
+	# La animación de golpe estaba RESUELTA y no se reproducía nunca: `ANIM_HIT`
+	# existía y nadie la llamaba. Va acá porque comparte el mismo cooldown, así que
+	# el destello, el frenón y el sonido son un solo "tick" coherente.
+	play_anim(ANIM_HIT, false, 1.4)
 	if _flash_time <= 0.0:
 		_set_flash(true)
 	_flash_time = HIT_FLASH_TIME
@@ -868,6 +878,8 @@ func _die(is_headshot: bool, hit_from: Vector3) -> void:
 		player.add_shake(6.0 if is_alpha else 1.2)
 	GameState.register_kill(is_headshot)
 	FxManager.spawn_gibs(global_position, from_dir, body_radius, is_alpha, is_headshot)
+	# Antes del queue_free: después ya no hay posición ni nodo.
+	Audio.play_entity(enemy_type, "death", global_position, ModManager.sound_volume_of(enemy_type))
 	if enemy_type == "blood_lord":
 		_spawn_bats_on_death()
 	# Va antes del queue_free(): los traits que invocan o explotan necesitan la

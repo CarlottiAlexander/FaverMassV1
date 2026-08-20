@@ -16,6 +16,11 @@ const RECOIL_DECAY := 8.0
 const SHAKE_DECAY := 12.0
 const BOOST_DECAY := 5.0
 
+## Metros recorridos entre dos pisadas. El ritmo sale SOLO de la velocidad real, así
+## que correr, caminar y agacharse suenan distinto sin una sola línea extra: el
+## sprint es 1.6x, así que da 1.6 veces más pisadas por segundo.
+const PASO_CADA := 2.4
+
 ## Spin-up (armas con `spinup` en GameData: SMG, LMG, Minigun).
 ## Manteniendo el gatillo, la cadencia Y el daño trepan de x1 a x5. Premia el
 ## fuego sostenido sobre las oleadas grandes, que es donde estas armas brillan.
@@ -54,6 +59,8 @@ var recoil_pitch := 0.0
 var recoil_yaw := 0.0
 var screen_shake := 0.0
 var move_boost := Vector3.ZERO
+## Distancia acumulada desde la última pisada (ver PASO_CADA).
+var paso_dist := 0.0
 
 signal health_changed
 signal ammo_changed
@@ -118,6 +125,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_rescue_if_fell_off()
+	_procesar_pasos(delta, crouching)
 
 	if railgun_boost_timer > 0.0:
 		railgun_boost_timer -= delta
@@ -135,6 +143,28 @@ func _physics_process(delta: float) -> void:
 
 	if GameState.state == GameState.State.PLAYING:
 		_process_weapon(delta, sprinting, crouching)
+
+## Pisadas por DISTANCIA recorrida, no por temporizador ni por animación. Es lo que
+## hace que el ritmo acompañe solo a la velocidad: sprintar da más pisadas por
+## segundo sin ninguna regla aparte, y frenar contra una pared no sigue sonando
+## (avanza el reloj pero no la posición).
+##
+## No suena en el aire a propósito: el salto de escopeta encadenado tendría al
+## jugador "caminando" por el cielo.
+func _procesar_pasos(delta: float, crouching: bool) -> void:
+	if not is_on_floor() or GameState.state != GameState.State.PLAYING:
+		paso_dist = 0.0
+		return
+	var avance := Vector2(velocity.x, velocity.z).length() * delta
+	if avance < 0.001:
+		return
+	paso_dist += avance
+	if paso_dist < PASO_CADA:
+		return
+	paso_dist = 0.0
+	# Agachado se camina despacio y CALLADO: es la única forma que tiene el jugador
+	# de decidir cuánto ruido hace.
+	Audio.play_flat(Audio.paso(), "paso", 0.35 if crouching else 0.7)
 
 ## Red de seguridad del borde del mapa. El tech de salto de escopeta/cohete
 ## (sección 3.6) es deliberado y se puede ENCADENAR en el aire — cada disparo al
@@ -168,6 +198,10 @@ func equip_weapon(id: String, rarity: int) -> void:
 	burst_cooldown = 0.0
 	left_was_pressed = false
 	spinup = 1.0  # el calentamiento no se hereda entre armas
+	# Gateado por el estado: `equip_weapon` también corre al armar al jugador, y un
+	# chasquido metálico en la pantalla de título no lo pidió nadie.
+	if GameState.state == GameState.State.PLAYING:
+		Audio.play_flat(Audio.ui("weapon_switch"), "switch")
 	if id == "railgun":
 		railgun_beam_remaining = GameData.RAILGUN_BEAM_DURATION
 		ammo = 0
@@ -326,6 +360,10 @@ func _apply_recoil_and_shake(w: Dictionary) -> void:
 	add_shake(kick * 40.0)
 	if weapon_view:
 		weapon_view.on_fire()
+	# Único punto por el que pasan TODOS los disparos de proyectil. Va plano y no
+	# posicional: tu propia arma no tiene que atenuarse con la distancia.
+	# La clave le pone el intervalo mínimo: la Minigun llega a 60 disparos/s.
+	Audio.play_flat(Audio.weapon_shot(current_weapon), "shot")
 
 func _try_movement_tech() -> void:
 	if current_weapon != "shotgun" and current_weapon != "rocket":
@@ -358,6 +396,9 @@ func take_damage(amount: float, attacker_pos: Vector3 = Vector3.ZERO) -> void:
 	health -= amount
 	health_changed.emit()
 	damage_taken.emit(attacker_pos)
+	# Plano: te pasa a VOS. Con la clave puesta, porque con 40 enemigos encima los
+	# golpes llegan en ráfaga y sin tope sonaría a distorsión.
+	Audio.play_flat(Audio.ui("player_hurt"), "player_hurt")
 	if health <= 0.0:
 		health = 0.0
 		health_changed.emit()
@@ -365,6 +406,7 @@ func take_damage(amount: float, attacker_pos: Vector3 = Vector3.ZERO) -> void:
 
 func _die() -> void:
 	dead = true
+	Audio.play_flat(Audio.ui("player_death"))
 	# La señal existía desde siempre y no tenía un solo listener; ahora es el
 	# aviso que le llega al modo de juego.
 	died.emit()

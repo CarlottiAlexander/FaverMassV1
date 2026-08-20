@@ -47,6 +47,9 @@ var _presets: Dictionary = {}
 var _traits: Dictionary = {}
 ## id de mapa -> perfil ya fusionado y validado.
 var _maps: Dictionary = {}
+## tipo -> {ranura: AudioStream|Array, _silent, _inherit, _volume}. Los sonidos son
+## PROPIEDAD DE LA ENTIDAD: viajan adentro del mod, igual que el .glb.
+var _sounds: Dictionary = {}
 
 func _ready() -> void:
 	var res := ModPaths.ensure_dir()
@@ -203,6 +206,9 @@ func commit() -> void:
 	# resueltas del modelo anterior — y el síntoma es dificilísimo de atribuir.
 	EnemyModelImport.clear_caches()
 	Enemy.clear_anim_cache()
+	# El caché de sonidos vive en un autoload y sobrevive al reinicio de escena:
+	# sin vaciarlo, un mod recién activado seguiría sonando como el anterior.
+	Audio.clear_cache()
 
 	_models.clear()
 	_load_notes.clear()
@@ -210,6 +216,7 @@ func commit() -> void:
 	_presets.clear()
 	_traits.clear()
 	_maps.clear()
+	_sounds.clear()
 	var stats_ov: Dictionary = {}
 	var spawn_ov: Dictionary = {}
 	var color_ov: Dictionary = {}
@@ -311,6 +318,34 @@ func preset_of(enemy_type: String) -> String:
 ## Rasgos declarados para este tipo: {nombre: {parámetros}}. Vacío para los 8 base.
 func traits_of(enemy_type: String) -> Dictionary:
 	return _traits.get(enemy_type, {})
+
+# --- Sonidos ----------------------------------------------------------------
+# El contrato que consume `Audio.resolver()`. Se llena cuando los mods puedan
+# declarar sonidos; hasta entonces devuelve los valores neutros, que hacen que todo
+# caiga al sonido del juego base.
+
+## Stream declarado por el mod para esta ranura, o null. Una ranura con varias
+## opciones devuelve una al azar: es lo que evita escuchar el mismo golpe 200 veces.
+func sound_for(enemy_type: String, ranura: String) -> AudioStream:
+	var s: Dictionary = _sounds.get(enemy_type, {})
+	var v = s.get(ranura, null)
+	if v == null:
+		return null
+	if v is Array:
+		return null if (v as Array).is_empty() else (v as Array).pick_random()
+	return v
+
+## El mod pidió quedarse MUDO a propósito. Distinto de "no declaró nada", que
+## hereda del tipo base.
+func sound_is_silent(enemy_type: String) -> bool:
+	return bool((_sounds.get(enemy_type, {}) as Dictionary).get("_silent", false))
+
+## De qué tipo base heredar lo que el mod no declaró.
+func sound_inherit_of(enemy_type: String) -> String:
+	return String((_sounds.get(enemy_type, {}) as Dictionary).get("_inherit", enemy_type))
+
+func sound_volume_of(enemy_type: String) -> float:
+	return float((_sounds.get(enemy_type, {}) as Dictionary).get("_volume", 1.0))
 
 # --- Mapas ------------------------------------------------------------------
 
