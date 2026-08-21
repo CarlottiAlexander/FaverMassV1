@@ -103,6 +103,34 @@ RASGOS ("traits") — se pueden combinar todos los que quieras
     cloak               invisible hasta que te acercas.
     headshot_immune     no muere de un headshot.
 
+SONIDOS ("sounds") — cada bicho trae los suyos, adentro de tu carpeta
+    "sounds": {
+      "attack": "audio/mordida.ogg",
+      "hit":    ["audio/dolor1.ogg", "audio/dolor2.ogg"],
+      "death":  "audio/muerte.ogg",
+      "volume": 0.8,
+      "inherit": "hollow",
+      "silent": false
+    }
+
+    Ranuras: attack (cuando te pega), hit (cuando lo golpeas), death.
+    Formatos: .ogg, .wav, .mp3 — conviene OGG. El WAV se come el tope de
+    tamano (8 MB por archivo) y el MP3 suele traer un silencio al principio
+    que arruina cualquier golpe.
+
+    UNA LISTA es variacion al azar, y conviene sobre todo en "hit": es el
+    sonido que mas se repite en toda la partida.
+
+    Lo que NO declares se HEREDA del tipo base ("inherit", por defecto el que
+    reemplazas, o el hollow si es nuevo). Si queres que tu bicho sea mudo a
+    proposito, poné "silent": true — es distinto de no declarar nada.
+
+    Los sonidos duran poco a proposito: si uno pasa de 2.5 segundos el juego
+    avisa, porque se va a solapar consigo mismo hasta volverse ruido.
+
+Para ver que resolvio cada bicho y que quedo mudo, esta la herramienta
+tools/audio_report.tscn.
+
 No se puede escribir comportamiento propio: los mods NO ejecutan codigo. Si
 necesitas logica condicional ("si el jugador esta bajo de vida, huye"), jefes
 multifase o armas nuevas, eso hoy no se puede.

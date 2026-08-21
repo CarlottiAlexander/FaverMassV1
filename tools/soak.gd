@@ -98,4 +98,14 @@ func _run() -> void:
 	print("SOAK audio: %d eventos | pico %d voces 3D de %d | %d descartados por intervalo -> %s" % [
 		Audio.eventos, Audio.pico_voces_3d, Audio.VOCES_3D, Audio.descartados,
 		"OK" if Audio.pico_voces_3d <= Audio.VOCES_3D else "SE DESBORDÓ"])
+	# El ambiente no se puede escuchar acá, pero SÍ se puede afirmar que está
+	# sonando y que el cruce siguió al caos: en la oleada 25 el caos está al máximo,
+	# así que el lecho infernal tiene que estar arriba y el calmo abajo.
+	print("SOAK pasos: %d pisadas de enemigo emitidas (tope %d por frame)" % [
+		Enemy.pasos_emitidos, Enemy.PASOS_POR_FRAME])
+	var l := Audio.estado_lechos()
+	print("SOAK ambiente: calmo=%s caos=%s | caos_level %.2f -> mezcla %.2f (objetivo %.2f) | %.1f dB vs %.1f dB -> %s" % [
+		l["calmo"], l["caos"], GameState.chaos_level, l["mezcla"], l["objetivo"],
+		l["db_calmo"], l["db_caos"],
+		"el infernal domina, OK" if float(l["db_caos"]) > float(l["db_calmo"]) else "el calmo domina"])
 	get_tree().quit()

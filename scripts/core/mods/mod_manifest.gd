@@ -84,7 +84,7 @@ static func parse(json_path: String, mod_dir: String) -> Dictionary:
 			if typeof(mc[id]) != TYPE_DICTIONARY:
 				out["warnings"].append("mapa \"%s\": se ignoró, no es un objeto" % id)
 				continue
-			var r := MapProfile.merge(mc[id])
+			var r := MapProfile.merge(mc[id], mod_dir)
 			for w: String in r["warnings"]:
 				out["warnings"].append("mapa \"%s\": %s" % [id, w])
 			mapas[id] = r["perfil"]

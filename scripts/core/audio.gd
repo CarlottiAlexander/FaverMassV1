@@ -89,6 +89,10 @@ func _ready() -> void:
 	_crear_buses()
 	Config.apply_volume()
 	_crear_pools()
+	_crear_lechos()
+	# El fundido de ambiente y musica tiene que seguir corriendo con el arbol
+	# pausado: si no, abrir el menu congela la mezcla a mitad de camino.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 # --- Buses ------------------------------------------------------------------
 
@@ -285,6 +289,157 @@ func soltar() -> void:
 		p.stop()
 		p.stream = null
 	clear_cache()
+
+# --- Ambiente y música del mapa ---------------------------------------------
+# Los dos son propiedad del MAPA, igual que su niebla. El juego no tiene una tabla
+# de "qué suena en cada arena": el mapa lo trae y `world.gd` lo pasa para acá.
+
+## Segundos de cruce entre el ambiente calmo y el infernal, y de entrada/salida de
+## la música. Largo a propósito: un fundido corto se escucha como un corte.
+const FUNDIDO := 2.5
+## Bajo el nivel de música mientras suena la fanfarria de fin de partida, para que
+## no compitan. No se corta: cortarla seco se nota más que dejarla bajar.
+const FUNDIDO_FINAL := 1.5
+
+var _amb_calmo: AudioStreamPlayer = null
+var _amb_caos: AudioStreamPlayer = null
+var _musica: AudioStreamPlayer = null
+var _vol_ambiente := 0.6
+var _vol_musica := 0.5
+## 0 = sólo el ambiente calmo, 1 = sólo el infernal. Lo mueve `chaos_level`.
+var _mezcla_caos := 0.0
+var _mezcla_objetivo := 0.0
+## Multiplicador global de la música: baja a 0 al terminar la partida.
+var _musica_gain := 1.0
+var _musica_gain_objetivo := 1.0
+
+func _crear_lechos() -> void:
+	_amb_calmo = _lecho(BUS_AMBIENTE)
+	_amb_caos = _lecho(BUS_AMBIENTE)
+	_musica = _lecho(BUS_MUSICA)
+	GameState.chaos_changed.connect(_on_caos)
+
+## Un reproductor de fondo: sin posición, en bucle y que **sigue sonando con el
+## árbol pausado**. Sin `PROCESS_MODE_ALWAYS` la música se corta al abrir el menú
+## de pausa, que es exactamente cuando más raro suena el silencio.
+func _lecho(bus: String) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.bus = bus
+	p.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(p)
+	return p
+
+## La llama `world.gd` cuando construye la arena. Recibe el perfil del mapa ya
+## resuelto (rutas absolutas validadas por `MapProfile`).
+func aplicar_mapa(perfil: Dictionary) -> void:
+	var amb: Dictionary = perfil.get("ambience", {})
+	var mus: Dictionary = perfil.get("music", {})
+	_vol_ambiente = float(amb.get("volume", 0.6))
+	_vol_musica = float(mus.get("volume", 0.5))
+	_musica_gain = 1.0
+	_musica_gain_objetivo = 1.0
+
+	# Un mapa sin ambiente infernal declarado usa el calmo para los dos lados: la
+	# mezcla sigue funcionando y simplemente no se oye cambiar.
+	var calmo := _lecho_stream(String(amb.get("sound", "")))
+	var caos := _lecho_stream(String(amb.get("chaos_sound", "")))
+	_poner(_amb_calmo, calmo)
+	_poner(_amb_caos, caos if caos != null else calmo)
+	_poner(_musica, _lecho_stream(String(mus.get("sound", ""))))
+
+	_mezcla_caos = 0.0
+	_on_caos(GameState.chaos_level)
+	_aplicar_mezcla(true)
+
+## Carga un archivo de fondo. Ruta vacía = no hay, y eso no es un error.
+## Los lechos van SIEMPRE en bucle: son colchones, no efectos.
+func _lecho_stream(ruta: String) -> AudioStream:
+	if ruta == "":
+		return null
+	var s: AudioStream = null
+	if ruta.begins_with("res://"):
+		# Lecho del juego base: es NUESTRO y sí pasa por el importador de Godot.
+		s = load(ruta) if ResourceLoader.exists(ruta) else null
+	else:
+		# Tope grande: un lecho es legítimamente mucho más pesado que un efecto.
+		var r := ModSoundLoader.load_sound(ruta, ModSoundLoader.MAX_LECHO_BYTES)
+		if r["error"] != "":
+			push_warning("audio de mapa: %s (%s)" % [r["error"], ruta])
+			return null
+		s = r["stream"]
+	if s == null:
+		return null
+	if s is AudioStreamOggVorbis:
+		(s as AudioStreamOggVorbis).loop = true
+	elif s is AudioStreamMP3:
+		(s as AudioStreamMP3).loop = true
+	elif s is AudioStreamWAV:
+		(s as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+		(s as AudioStreamWAV).loop_end = (s as AudioStreamWAV).data.size() / 2
+	return s
+
+func _poner(p: AudioStreamPlayer, s: AudioStream) -> void:
+	if p == null:
+		return
+	p.stop()
+	p.stream = s
+	if s != null:
+		p.volume_db = -60.0   # arranca callado; el fundido lo sube
+		p.play()
+
+func _on_caos(nivel: float) -> void:
+	# `chaos_level` va de 0 a 3 (`world.gd` lo usa igual para cielo y niebla).
+	_mezcla_objetivo = clampf(nivel / 3.0, 0.0, 1.0)
+
+## La partida terminó: la música se va para que la fanfarria quede sola.
+func silenciar_musica() -> void:
+	_musica_gain_objetivo = 0.0
+
+## Estado de los lechos. Existe para poder AFIRMAR sobre la mezcla sin escucharla:
+## que el ambiente esté sonando y que el cruce haya seguido al `chaos_level` es
+## verificable, y en headless es lo único verificable.
+func estado_lechos() -> Dictionary:
+	return {
+		"calmo": _sonando(_amb_calmo),
+		"caos": _sonando(_amb_caos),
+		"musica": _sonando(_musica),
+		"mezcla": _mezcla_caos,
+		"objetivo": _mezcla_objetivo,
+		"db_calmo": _db(_amb_calmo),
+		"db_caos": _db(_amb_caos),
+	}
+
+func _sonando(p: AudioStreamPlayer) -> bool:
+	return p != null and p.stream != null and p.playing
+
+func _db(p: AudioStreamPlayer) -> float:
+	return p.volume_db if _sonando(p) else -99.0
+
+func _process(delta: float) -> void:
+	if _amb_calmo == null:
+		return
+	var cambio := false
+	if not is_equal_approx(_mezcla_caos, _mezcla_objetivo):
+		_mezcla_caos = move_toward(_mezcla_caos, _mezcla_objetivo, delta / FUNDIDO)
+		cambio = true
+	if not is_equal_approx(_musica_gain, _musica_gain_objetivo):
+		_musica_gain = move_toward(_musica_gain, _musica_gain_objetivo, delta / FUNDIDO_FINAL)
+		cambio = true
+	if cambio:
+		_aplicar_mezcla(false)
+
+func _aplicar_mezcla(_inicial: bool) -> void:
+	# Cruce de POTENCIA CONSTANTE (raíz cuadrada), no lineal. Con un cruce lineal
+	# los dos lechos suman menos energía en el medio del recorrido y se escucha un
+	# bache justo donde la transición tendría que ser imperceptible.
+	_fijar(_amb_calmo, _vol_ambiente * sqrt(1.0 - _mezcla_caos))
+	_fijar(_amb_caos, _vol_ambiente * sqrt(_mezcla_caos))
+	_fijar(_musica, _vol_musica * _musica_gain)
+
+func _fijar(p: AudioStreamPlayer, lineal: float) -> void:
+	if p == null or p.stream == null:
+		return
+	p.volume_db = linear_to_db(maxf(lineal, 0.0001))
 
 # --- Interno ----------------------------------------------------------------
 

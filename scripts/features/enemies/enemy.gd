@@ -63,6 +63,17 @@ const ANIM_STRIDE_VERY_FAR := 4
 const ANIM_BUDGET_FULL := 24    # estos animan todos los frames
 const ANIM_BUDGET_HALF := 64    # estos, uno de cada dos
 
+## PISADAS. Los recortes de acá son de DISEÑO, no de rendimiento: ver
+## `_procesar_pasos`. El radio es CORTO (18 m contra los 45 del resto del audio)
+## porque cuarenta enemigos pisando a la vez no es ambientación, es ruido blanco.
+const PASO_DIST := 18.0
+## Zancada como fracción de la altura del cuerpo: el Knight mide 3.30 y la Thrall
+## 2.05, así que el grandote pisa más espaciado sin ninguna regla aparte.
+const PASO_ZANCADA := 0.85
+## Cuántos enemigos pueden pisar en un mismo frame de física, entre TODOS.
+const PASOS_POR_FRAME := 3
+const PASO_VOLUMEN := 0.5
+
 ## ACUSE DE RECIBO DEL IMPACTO: un destello rojo más un frenón breve. Los dos
 ## salen del mismo disparador (`_react_to_hit`) y comparten cooldown, así que se
 ## leen como un solo "tick" por golpe.
@@ -171,6 +182,8 @@ var _react_cd := 0.0
 ## física en `_physics_process` y reusados por todo lo demás. Antes cada sistema
 ## los recalculaba por su cuenta.
 var dist_to_player_sq := 0.0
+## Distancia acumulada desde la ultima pisada (ver `_procesar_pasos`).
+var paso_dist := 0.0
 ## Dentro del alcance de dibujado, mire para donde mire el jugador.
 var near_player := true
 ## Además, delante de la cámara. Más restrictivo que `near_player`.
@@ -391,6 +404,14 @@ static func clear_anim_cache() -> void:
 
 ## Ranking de cercanía al jugador, reconstruido UNA vez por frame y compartido.
 ## Mismo patrón que la grilla de separación: guarda con el número de frame.
+## Tope de pisadas por frame, compartido entre TODOS los enemigos. Mismo patron de
+## guarda por numero de frame que el ranking de animacion y la grilla de separacion.
+## Cuantas pisadas de enemigo se emitieron. Existe para poder AFIRMAR en el soak
+## que el sistema se disparo de verdad, en vez de suponerlo.
+static var pasos_emitidos := 0
+static var _paso_frame := -1
+static var _pasos_este_frame := 0
+
 static var _anim_rank: Dictionary = {}
 static var _anim_rank_frame := -1
 
@@ -681,6 +702,57 @@ func _physics_process(delta: float) -> void:
 		global_position.x += velocity.x * delta
 		global_position.z += velocity.z * delta
 		global_position.y = body_height * 0.5
+
+	_procesar_pasos(delta)
+
+## Pisadas del enemigo, por DISTANCIA recorrida.
+##
+## No se atan a la animación, y no es por vagancia: el `_process` de los enemigos
+## está recortado por distancia (strides 2/3/4), por presupuesto (los 24 más
+## cercanos animan completo) y por visibilidad, así que un paso enganchado a la
+## animación sonaría SALTEADO justo en los que están lejos. La velocidad, en
+## cambio, se actualiza siempre.
+##
+## DOS RECORTES, y los dos son de DISEÑO, no de rendimiento:
+##  - Radio corto (18 m contra los 45 del resto del audio). Cuarenta enemigos
+##    pisando a la vez no es ambientación, es ruido blanco.
+##  - Tope por frame, compartido entre todos. En una turba, aunque veinte crucen
+##    su umbral en el mismo frame, suenan pocos — y como el resto conserva su
+##    distancia acumulada, el que no sonó suena en el próximo paso, no se pierde
+##    el ritmo.
+##
+## Que se oiga lo que viene POR ATRÁS es el punto: por eso el recorte es por
+## distancia y no por visibilidad como el del dibujado.
+func _procesar_pasos(delta: float) -> void:
+	if flying or thrown or dead:
+		return
+	if dist_to_player_sq > PASO_DIST * PASO_DIST:
+		return
+	var avance := Vector2(velocity.x, velocity.z).length() * delta
+	if avance < 0.001:
+		return
+	# La zancada sale del TAMAÑO del bicho: el Knight mide 3.30 y la Thrall 2.05,
+	# así que el grandote pisa más espaciado y más fuerte. Sale gratis y es
+	# exactamente la diferencia que hace que se distingan de oído.
+	paso_dist += avance
+	if paso_dist < body_height * PASO_ZANCADA:
+		return
+	paso_dist = 0.0
+
+	var f := Engine.get_physics_frames()
+	if _paso_frame != f:
+		_paso_frame = f
+		_pasos_este_frame = 0
+	if _pasos_este_frame >= PASOS_POR_FRAME:
+		return
+	_pasos_este_frame += 1
+	pasos_emitidos += 1
+
+	# Se atenúa con la distancia además de la atenuación del reproductor: un paso
+	# es un sonido chico y a 15 m tiene que ser una insinuación, no un golpe.
+	var cerca := 1.0 - sqrt(dist_to_player_sq) / PASO_DIST
+	Audio.play_entity(enemy_type, "step", global_position,
+		ModManager.sound_volume_of(enemy_type) * PASO_VOLUMEN * cerca)
 
 ## Distancia al jugador y visibilidad, una sola vez por frame. Todo lo que se
 ## saltea cuando `visible_to_player` es false (animar el rig, girar el modelo,

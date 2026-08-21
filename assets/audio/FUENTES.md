@@ -43,3 +43,27 @@ rifle de cerrojo de francotirador.
   en la carpeta alcanza para sumar variación.
 
 `tools/audio_report.tscn` dice qué resolvió cada tipo y qué quedó mudo.
+
+## Ambiente y musica
+
+| Archivo | Origen | Licencia |
+|---|---|---|
+| `ambience_calm.wav`, `ambience_chaos.wav` | **generados por `tools/ambience_gen.tscn`** | nuestros |
+| `music_arena.ogg` | *Post Apocalyptic Wastelands* de Juhani Junkala (OpenGameArt) | CC0 verificado en la ficha |
+
+Los dos lechos de ambiente **no salieron de un pack: los genera el motor**. Un
+disparo o un rugido sintetizados suenan a juguete — por eso las armas salieron de
+grabaciones reales. Pero el viento y un drone grave son ruido filtrado, que es
+literalmente lo que un sintetizador hace bien, y así se consigue algo que ningún
+pack da gratis: **un bucle exactamente sin costura**. La herramienta lo mide y lo
+reporta (`costura: salto X | típico Y -> OK, no clickea`), así que no hay que
+confiar en el oído para saberlo.
+
+Regenerarlos da el MISMO archivo: la semilla del ruido es fija.
+
+⚠ **`music_arena.ogg` tira un warning cosmético al cargar** — su encabezado Vorbis
+trae un comentario mal formado del encoder de Sony (`"Sony Ogg Vorbis 1.0 Final"`,
+sin el `=` que exige el formato). Es del archivo original y **no se puede parchear
+editando bytes**: las páginas Ogg llevan CRC y cualquier cambio las invalida (se
+probó, y rompió el archivo). Es un WARNING, no un error, y no afecta a nada. Para
+sacarlo habría que reencodear, y Godot no encodea Ogg.

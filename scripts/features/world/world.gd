@@ -38,6 +38,9 @@ func _ready() -> void:
 	_generate_obstacles()
 	_generate_walls()
 	_generate_sky_rig()
+	# El ambiente y la música son del MAPA, igual que su niebla, así que se
+	# entregan desde el mismo lugar donde se arma todo lo demás del mapa.
+	Audio.aplicar_mapa(perfil)
 	# El caos vive en el autoload `GameState`, que SIEMPRE existe.
 	#
 	# ANTES se buscaba al WaveManager por grupo y había que diferir la conexión,

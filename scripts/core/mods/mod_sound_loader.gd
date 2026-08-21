@@ -16,6 +16,11 @@ extends RefCounted
 ## sonido de 8 MB ya es sospechoso (son ~45 segundos de WAV sin comprimir), y acá
 ## los archivos se cargan de a decenas, no de a uno.
 const MAX_FILE_BYTES := 8 * 1024 * 1024
+## Los LECHOS (ambiente y música) tienen su propio tope, mucho más alto. Un efecto
+## de 8 MB es sospechoso; una música de 5 minutos son 14 MB y es completamente
+## normal. El tope existe igual: es un colchón contra un archivo absurdo, no contra
+## un archivo grande.
+const MAX_LECHO_BYTES := 32 * 1024 * 1024
 ## Por encima de esto se acepta igual pero se avisa. Un golpe de enemigo que dura
 ## 3 segundos se solapa consigo mismo hasta volverse ruido: la Minigun hace
 ## impactar 60 balas por segundo.
@@ -28,7 +33,10 @@ const EXTENSIONES := ["ogg", "wav", "mp3"]
 ## Devuelve {stream: AudioStream, error: String, warnings: Array[String], segundos: float}.
 ## `stream` es null si y sólo si `error` no está vacío. NUNCA tira una excepción:
 ## GDScript no tiene try/catch, así que cada paso que puede fallar se chequea a mano.
-static func load_sound(abs_path: String) -> Dictionary:
+## `max_bytes` distingue un EFECTO de un LECHO (ambiente/música): no sólo cambia el
+## tope de tamaño, también apaga el aviso de "dura demasiado" — un colchón de cinco
+## minutos es correcto y un golpe de cinco minutos no.
+static func load_sound(abs_path: String, max_bytes := MAX_FILE_BYTES) -> Dictionary:
 	var out := {"stream": null, "error": "", "warnings": [], "segundos": 0.0}
 
 	var ext := abs_path.get_extension().to_lower()
@@ -43,9 +51,9 @@ static func load_sound(abs_path: String) -> Dictionary:
 	# El tope se chequea ANTES de cargar: un archivo enorme no debe llegar nunca al
 	# decodificador, porque para entonces ya se pagó la memoria.
 	var size := _file_size(abs_path)
-	if size > MAX_FILE_BYTES:
+	if size > max_bytes:
 		out["error"] = "pesa %.1f MB y el tope es %d MB" % [
-			size / 1048576.0, MAX_FILE_BYTES / 1048576]
+			size / 1048576.0, max_bytes / 1048576]
 		return out
 
 	var st: AudioStream = null
@@ -69,7 +77,7 @@ static func load_sound(abs_path: String) -> Dictionary:
 	if seg <= 0.0:
 		out["error"] = "dura 0 segundos: el archivo está truncado o incompleto"
 		return out
-	if seg > WARN_SEGUNDOS:
+	if seg > WARN_SEGUNDOS and max_bytes == MAX_FILE_BYTES:
 		out["warnings"].append("dura %.1f s: para un efecto es largo y se va a solapar consigo mismo" % seg)
 
 	out["stream"] = st

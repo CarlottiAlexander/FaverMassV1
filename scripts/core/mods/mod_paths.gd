@@ -179,6 +179,25 @@ arena. Van en el mismo mod.json, y despues se elige desde el menu de Mods.
 
 Los colores son [rojo, verde, azul] de 0 a 1.
 
+EL SONIDO DEL MAPA (ambiente y musica)
+    "ambience": { "sound": "audio/viento.ogg",
+                  "chaos_sound": "audio/tormenta.ogg",
+                  "volume": 0.6 },
+    "music":    { "sound": "audio/tema.ogg", "volume": 0.45 }
+
+    El ambiente y la musica son propiedad DEL MAPA, igual que su niebla. El
+    juego no tiene una tabla de "que suena en cada arena": tu mapa lo trae.
+
+    chaos_sound es el ambiente cuando el mundo se pone infernal en las oleadas
+    altas. El cambio no es un corte: los dos lechos se cruzan de a poco
+    siguiendo el mismo valor de caos que ya mueve el cielo y la niebla.
+
+    Los dos van en bucle solos, asi que conviene que el archivo empalme bien
+    consigo mismo. El tope para estos es 32 MB (mucho mas alto que el de un
+    efecto, porque una musica de 5 minutos son ~14 MB y es normal).
+
+    Si no declaras nada, suenan los del juego base.
+
 SI TU MODELO NO SE VE BIEN
 --------------------------
     "model_yaw": 0          si camina de espaldas (por defecto 180)

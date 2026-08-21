@@ -28,6 +28,19 @@ const DEFECTO := {
 	"fog": {"calm": [0.15, 0.08, 0.12], "chaos": [0.34, 0.13, 0.11], "begin": 20.0, "end": 30.0},
 	"moon": {"enabled": true},
 	"floor": {"color": []},
+	## Ambiente y música del mapa. Van ACÁ y no en una tabla del juego porque son
+	## propiedad del mapa, igual que su niebla: pedido explícito del usuario, *"el
+	## mapa tendría que tener sus propios sonidos en el ambiente"*.
+	##
+	## `chaos_sound` es el ambiente cuando el mundo se pone infernal. El cielo, la
+	## niebla y los muros ya cambian con `chaos_level`; el sonido acompaña por el
+	## mismo camino, cruzándose de a poco entre los dos.
+	"ambience": {
+		"sound": "res://assets/audio/ambience_calm.wav",
+		"chaos_sound": "res://assets/audio/ambience_chaos.wav",
+		"volume": 0.6,
+	},
+	"music": {"sound": "res://assets/audio/music_arena.ogg", "volume": 0.45},
 	## El modo de juego que trae el mapa. Vacío = el de siempre (oleadas infinitas).
 	## `waves` es declarativo A PROPÓSITO: el menú puede decir "este mapa no tiene
 	## oleadas" sin ejecutar nada, y el runner puede apagarlas antes del primer
@@ -53,7 +66,10 @@ const LIMITES := {
 
 ## Fusiona lo que declaró el mod sobre los defaults, campo por campo y sin confiar
 ## en nada. Devuelve {perfil, warnings}.
-static func merge(crudo: Dictionary) -> Dictionary:
+## `mod_dir` hace falta para resolver las rutas de audio: un mapa las declara
+## relativas a su propio mod, igual que un enemigo declara su `.glb`. Vacío = mapa
+## del juego base, que no declara sonidos.
+static func merge(crudo: Dictionary, mod_dir := "") -> Dictionary:
 	var p: Dictionary = DEFECTO.duplicate(true)
 	var avisos: Array = []
 
@@ -100,6 +116,8 @@ static func merge(crudo: Dictionary) -> Dictionary:
 	if typeof(modo) == TYPE_DICTIONARY and not (modo as Dictionary).is_empty():
 		p["mode"] = _modo(modo, avisos)
 
+	_audio(crudo, p, mod_dir, avisos)
+
 	# Coherencias que si no explotan más adelante y son dificilísimas de atribuir.
 	var ob: Dictionary = p["obstacles"]
 	if float(ob["size_min"]) > float(ob["size_max"]):
@@ -114,6 +132,43 @@ static func merge(crudo: Dictionary) -> Dictionary:
 		fg["end"] = float(fg["begin"]) + 10.0
 
 	return {"perfil": p, "warnings": avisos}
+
+## Resuelve `ambience` y `music` a RUTAS ABSOLUTAS validadas. No carga nada: eso lo
+## hace `Audio` con `ModSoundLoader`, igual que con los enemigos.
+##
+## ⚠ Esta función existe porque `merge()` **sólo copia las claves que CONOCE**. Un
+## bloque nuevo que no se agregue explícitamente acá se descarta EN SILENCIO — ya
+## pasó exactamente eso con `mode` y costó encontrarlo.
+static func _audio(crudo: Dictionary, p: Dictionary, mod_dir: String, avisos: Array) -> void:
+	for bloque: String in ["ambience", "music"]:
+		var c = crudo.get(bloque, {})
+		if typeof(c) != TYPE_DICTIONARY:
+			continue
+		var destino: Dictionary = p[bloque]
+		destino["volume"] = clampf(float(c.get("volume", destino["volume"])), 0.0, 2.0)
+		for clave: String in ["sound", "chaos_sound"]:
+			if not destino.has(clave) or not c.has(clave):
+				continue
+			var rel := String(c[clave])
+			if rel == "":
+				continue
+			if mod_dir == "":
+				avisos.append("%s.%s: sólo un mod puede declarar sonidos" % [bloque, clave])
+				continue
+			var abs := mod_dir.path_join(rel).simplify_path()
+			# Misma regla que el modelo y los sonidos de enemigo: un mod no puede
+			# leer fuera de su carpeta.
+			if not abs.begins_with(mod_dir):
+				avisos.append("%s.%s: la ruta sale de la carpeta del mod" % [bloque, clave])
+				continue
+			if not FileAccess.file_exists(abs):
+				avisos.append("%s.%s: no existe \"%s\"" % [bloque, clave, rel])
+				continue
+			if not ModSoundLoader.EXTENSIONES.has(abs.get_extension().to_lower()):
+				avisos.append("%s.%s: \"%s\" no es un formato soportado (usar %s)" % [
+					bloque, clave, rel, ", ".join(ModSoundLoader.EXTENSIONES)])
+				continue
+			destino[clave] = abs
 
 ## Normaliza el modo declarado por el mapa. Nada de acá ejecuta código: es sólo
 ## qué modo built-in usar, con qué parámetros y si hay oleadas.

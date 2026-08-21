@@ -10,7 +10,7 @@ extends Node
 ##
 ## Correr:  Godot --headless --path . tools/audio_report.tscn
 
-const RANURAS := ["attack", "hit", "death"]
+const RANURAS := ["attack", "hit", "death", "step"]
 
 func _ready() -> void:
 	print("BUSES")
@@ -29,6 +29,10 @@ func _ready() -> void:
 			# escucha otro necesita ver que su archivo no entró.
 			var propio := "*" if not ModManager.sounds_for(t, r).is_empty() else " "
 			linea += "  %s:%s%s" % [r, str(n) if n > 0 else "—", propio]
+		# Un volador resuelve "step" igual pero nunca lo usa. Decirlo, o la
+		# herramienta vuelve a prometer algo que no pasa.
+		if bool(GameData.enemy_stats_of(t).get("flying", false)):
+			linea += "   (vuela: no pisa)"
 		if ModManager.sound_is_silent(t):
 			linea += "   [MUDO a propósito]"
 		elif ModManager.sound_inherit_of(t) != t:
@@ -48,6 +52,22 @@ func _ready() -> void:
 		Audio.ui(n)
 		var v := Audio.variantes_de("ui|" + n)
 		print("  %-18s %s" % [n, "%d variante(s)" % v if v > 0 else "—  MUDO"])
+
+	print("\nMAPA  (ambiente y música son propiedad del mapa, no del juego)")
+	var perfil := ModManager.map_profile()
+	for bloque: String in ["ambience", "music"]:
+		var b: Dictionary = perfil.get(bloque, {})
+		for clave: String in ["sound", "chaos_sound"]:
+			if not b.has(clave):
+				continue
+			var ruta := String(b[clave])
+			print("  %-10s %-12s %s" % [bloque, clave, ruta.get_file() if ruta != "" else "— (ninguno)"])
+		print("  %-10s %-12s %.2f" % [bloque, "volume", b.get("volume", 0.0)])
+	# `world.gd` es quien los arranca, y acá no hay `world`: se aplica a mano para
+	# poder afirmar que los archivos del mapa CARGAN y quedan sonando.
+	Audio.aplicar_mapa(perfil)
+	var l := Audio.estado_lechos()
+	print("  sonando -> calmo:%s  caos:%s  música:%s" % [l["calmo"], l["caos"], l["musica"]])
 
 	print("\nPOOL")
 	print("  voces 3D: %d    planas: %d    intervalo mínimo: %.0f ms" % [
