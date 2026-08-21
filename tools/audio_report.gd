@@ -1,13 +1,16 @@
 extends Node
-## Qué sonido resolvió cada entidad, y si el pool aguanta.
+## Qué sonido resolvió cada entidad, con cuántas variantes, y si el pool aguanta.
 ##
 ## No se puede ESCUCHAR un test headless, así que esto afirma sobre el ESTADO: que
-## el stream cargó, de dónde salió (mod / heredado / mudo), y que el pool de voces
-## nunca se pasó de su tope bajo carga.
+## el stream cargó, de dónde salió (propio / heredado / mudo), cuántas variantes
+## tiene, y que el pool de voces nunca se pasó de su tope bajo carga.
+##
+## Es la respuesta a "mi bicho no suena": la fila del tipo dice exactamente qué
+## ranura quedó vacía.
 ##
 ## Correr:  Godot --headless --path . tools/audio_report.tscn
 
-const RANURAS := ["attack", "hit", "death", "spawn", "step"]
+const RANURAS := ["attack", "hit", "death"]
 
 func _ready() -> void:
 	print("BUSES")
@@ -15,26 +18,28 @@ func _ready() -> void:
 		print("  %-10s %6.2f dB" % [AudioServer.get_bus_name(i), AudioServer.get_bus_volume_db(i)])
 	print("  volumen guardado: master=%.2f  sfx=%.2f" % [Config.master_volume, Config.sfx_volume])
 
-	print("\nENEMIGOS  (de dónde sale cada sonido)")
+	print("\nENEMIGOS   (n = cuántas variantes; '—' = mudo)")
 	for t: String in GameData.enemy_types():
 		var linea := "  %-14s" % t
 		for r: String in RANURAS:
-			var s := Audio.resolver(t, r)
-			linea += "  %s:%s" % [r, "sí" if s != null else "—"]
+			Audio.resolver(t, r)
+			var n := Audio.variantes_de("%s|%s" % [t, r])
+			linea += "  %s:%s" % [r, str(n) if n > 0 else "—"]
 		print(linea)
 
-	print("\nARMAS")
+	print("\nARMAS      (muestra que le toca y a qué tono)")
 	for w: String in GameData.WEAPONS:
-		var s := Audio.weapon_shot(w)
-		print("  %-10s %s" % [w, "sí" if s != null else "MUDA"])
+		var cfg: Dictionary = Audio.ARMA_SONIDO.get(w, {})
+		var src: String = cfg.get("src", w)
+		var estado := "MUDA" if Audio.weapon_shot(w) == null else "%s x%.2f" % [src, cfg.get("tono", 1.0)]
+		print("  %-10s %s" % [w, estado])
 
 	print("\nOTROS")
-	for n in ["impact", "impact_headshot", "player_hurt", "player_death", "weapon_switch"]:
-		print("  %-18s %s" % [n, "sí" if Audio.ui(n) != null else "—"])
-
-	# Llamarlo una vez fuerza la carga; después se puede contar cuántas hay.
-	Audio.paso()
-	print("  %-18s %d variantes" % ["pasos", Audio._pasos.size()])
+	for n in ["impact", "impact_headshot", "explosion", "player_hurt", "player_death",
+			"weapon_switch", "footsteps/step", "wave_start", "victory", "defeat"]:
+		Audio.ui(n)
+		var v := Audio.variantes_de("ui|" + n)
+		print("  %-18s %s" % [n, "%d variante(s)" % v if v > 0 else "—  MUDO"])
 
 	print("\nPOOL")
 	print("  voces 3D: %d    planas: %d    intervalo mínimo: %.0f ms" % [
@@ -44,12 +49,11 @@ func _ready() -> void:
 ## Dispara mucho más rápido de lo que el juego puede, para probar que el tope
 ## aguanta. Es el peor caso real: la Minigun a full spin-up son 60 disparos/s.
 func _estres() -> void:
-	var s := Audio.ui("weapons/railgun_shot")
+	var s := Audio.ui("impact")
 	if s == null:
 		print("  (sin sonido cargado, no se puede medir el estrés)")
 		get_tree().quit()
 		return
-	var antes := Audio.pico_voces_3d
 	for i in 400:
 		# Sin clave: se saltea el intervalo mínimo a propósito, para castigar al pool.
 		Audio.play_3d(s, Vector3(randf_range(-5, 5), 0, randf_range(-5, 5)))

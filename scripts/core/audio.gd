@@ -31,16 +31,53 @@ const INTERVALO_MIN := 0.04
 ## de dibujado: si no se ve porque la niebla es opaca, tampoco tiene que oírse.
 const DIST_MAX_3D := 45.0
 
+## Cuántas variantes numeradas se buscan por ranura (`_00` … `_15`).
+const MAX_VARIANTES := 16
+const EXTS := ["ogg", "wav", "mp3"]
+
 const BUS_SFX := "SFX"
 const BUS_MUSICA := "Musica"
 const BUS_AMBIENTE := "Ambiente"
+
+## Con qué muestra y a qué TONO suena cada arma.
+##
+## Hay cuatro grabaciones reales para diez armas, así que el resto se derivan
+## cambiando el tono. No es un parche: es como se hace de verdad en audio de juegos.
+## Bajar el tono agranda el arma y subirlo la achica, y esa es exactamente la
+## diferencia que el oído usa para separar un revólver de una pistola.
+##
+## Las asignaciones tampoco son al azar: el SKS dispara el MISMO cartucho 7.62x39
+## que el AK-47, y el Mosin Nagant es literalmente un rifle de cerrojo de
+## francotirador. Donde se pudo, la muestra ES el arma.
+const ARMA_SONIDO := {
+	"pistol":   {"src": "pistol",  "tono": 1.00},
+	"revolver": {"src": "pistol",  "tono": 0.72},  # más grave = más calibre
+	"smg":      {"src": "pistol",  "tono": 1.14},  # mismo cartucho, cañón corto
+	"ak47":     {"src": "rifle",   "tono": 1.00},
+	"shotgun":  {"src": "shotgun", "tono": 1.00},
+	"sniper":   {"src": "sniper",  "tono": 1.00},
+	"lmg":      {"src": "rifle",   "tono": 0.86},
+	"minigun":  {"src": "rifle",   "tono": 1.20},
+	"rocket":   {"src": "shotgun", "tono": 0.55},  # el fogonazo del tubo, no la explosión
+	"railgun":  {"src": "railgun", "tono": 1.00},
+}
 
 var _p3d: Array = []
 var _pflat: Array = []
 ## clave -> segundos del último disparo, para el intervalo mínimo.
 var _ultimo: Dictionary = {}
-## "tipo|ranura" -> AudioStream (o null si quedó mudo). Lo vacía `ModManager`.
+## clave -> Array[AudioStream] con TODAS las variantes. Lo vacía `ModManager`.
 var _cache: Dictionary = {}
+## clave -> índice de la última variante usada, para no repetirla.
+var _ultima_variante: Dictionary = {}
+
+## RNG PROPIO, no el global. En este proyecto la secuencia del RNG global es un
+## invariante de balance: `wave_composition()` consume `randi_range` en un orden
+## fijo y `tools/wave_table.gd` lo verifica con semilla. Si el audio robara números
+## de ahí, la composición de oleada dependería de cuántos tiros sonaron — un
+## acoplamiento absurdo y muy difícil de diagnosticar. Con un RNG aparte no puede
+## pasar nunca.
+var _rng := RandomNumberGenerator.new()
 
 ## Contadores para poder verificar esto sin escuchar nada (ver tools/audio_report).
 var pico_voces_3d := 0
@@ -48,6 +85,7 @@ var eventos := 0
 var descartados := 0
 
 func _ready() -> void:
+	_rng.randomize()
 	_crear_buses()
 	Config.apply_volume()
 	_crear_pools()
@@ -86,7 +124,7 @@ func _crear_pools() -> void:
 
 ## Sonido en una posición del mundo. `clave` sirve para el intervalo mínimo: dos
 ## llamadas con la misma clave muy seguidas se descartan.
-func play_3d(stream: AudioStream, pos: Vector3, clave := "", volumen := 1.0) -> bool:
+func play_3d(stream: AudioStream, pos: Vector3, clave := "", volumen := 1.0, tono := 1.0) -> bool:
 	if stream == null or not _pasa_intervalo(clave):
 		return false
 	# Recorte por distancia: se decide ACÁ y no en el reproductor para no gastar
@@ -98,6 +136,11 @@ func play_3d(stream: AudioStream, pos: Vector3, clave := "", volumen := 1.0) -> 
 	p.stream = stream
 	p.global_position = pos
 	p.volume_db = linear_to_db(clampf(volumen, 0.01, 2.0))
+	# Se asigna SIEMPRE, no sólo cuando difiere de 1: los reproductores del pool se
+	# reciclan, así que un tono dejado por el sonido anterior se contagiaría al
+	# siguiente. Es el mismo tipo de bug que los materiales compartidos de la
+	# explosión, y en audio sería mucho más difícil de rastrear.
+	p.pitch_scale = clampf(tono, 0.05, 4.0)
 	p.play()
 	eventos += 1
 	pico_voces_3d = maxi(pico_voces_3d, _sonando_3d())
@@ -105,12 +148,13 @@ func play_3d(stream: AudioStream, pos: Vector3, clave := "", volumen := 1.0) -> 
 
 ## Sonido sin posición: tu propia arma, tu propio dolor. No se atenúa con la
 ## distancia porque ocurre EN vos.
-func play_flat(stream: AudioStream, clave := "", volumen := 1.0) -> bool:
+func play_flat(stream: AudioStream, clave := "", volumen := 1.0, tono := 1.0) -> bool:
 	if stream == null or not _pasa_intervalo(clave):
 		return false
 	var p: AudioStreamPlayer = _libre_flat()
 	p.stream = stream
 	p.volume_db = linear_to_db(clampf(volumen, 0.01, 2.0))
+	p.pitch_scale = clampf(tono, 0.05, 4.0)
 	p.play()
 	eventos += 1
 	return true
@@ -118,6 +162,16 @@ func play_flat(stream: AudioStream, clave := "", volumen := 1.0) -> bool:
 ## Atajo: resuelve el sonido de una entidad y lo reproduce donde está.
 func play_entity(tipo: String, ranura: String, pos: Vector3, volumen := 1.0) -> bool:
 	return play_3d(resolver(tipo, ranura), pos, "%s|%s" % [tipo, ranura], volumen)
+
+## El disparo del arma equipada, con su muestra y su tono (ver ARMA_SONIDO). Va
+## plano y no posicional: tu propia arma no tiene que atenuarse con la distancia.
+func play_weapon(id: String) -> bool:
+	var cfg: Dictionary = ARMA_SONIDO.get(id, {})
+	var src: String = cfg.get("src", id)
+	var s := ui("weapons/%s_shot" % src)
+	if s == null:
+		s = ui("weapons/generic_shot")
+	return play_flat(s, "shot", 1.0, float(cfg.get("tono", 1.0)))
 
 # --- Resolución: de dónde sale el sonido de una entidad ---------------------
 
@@ -128,48 +182,80 @@ func play_entity(tipo: String, ranura: String, pos: Vector3, volumen := 1.0) -> 
 ## tipo, para que "mi bicho no suena" tenga una respuesta.
 func resolver(tipo: String, ranura: String) -> AudioStream:
 	var clave := "%s|%s" % [tipo, ranura]
-	if _cache.has(clave):
-		return _cache[clave]
-
-	var s: AudioStream = ModManager.sound_for(tipo, ranura)
-	if s == null and not ModManager.sound_is_silent(tipo):
-		s = _base(ModManager.sound_inherit_of(tipo), ranura)
-	_cache[clave] = s
-	return s
+	if not _cache.has(clave):
+		var lista: Array[AudioStream] = []
+		var m: AudioStream = ModManager.sound_for(tipo, ranura)
+		if m != null:
+			lista.append(m)
+		elif not ModManager.sound_is_silent(tipo):
+			lista = _base(ModManager.sound_inherit_of(tipo), ranura)
+		_cache[clave] = lista
+	return _elegir(clave)
 
 ## Sonidos del juego base, por convención de nombre de archivo. Van por `res://`
 ## porque son NUESTROS y sí pasan por el importador de Godot; los de los mods no.
-func _base(tipo: String, ranura: String) -> AudioStream:
-	for ext in ["ogg", "wav", "mp3"]:
-		var p := "res://assets/audio/enemies/%s_%s.%s" % [tipo, ranura, ext]
-		if ResourceLoader.exists(p):
-			return load(p)
+func _base(tipo: String, ranura: String) -> Array[AudioStream]:
+	var propio := _variantes("res://assets/audio/enemies/%s_%s" % [tipo, ranura])
+	if not propio.is_empty():
+		return propio
 	# Familia: varios enemigos comparten sonido y no tiene sentido duplicar archivos.
-	for ext in ["ogg", "wav", "mp3"]:
-		var p := "res://assets/audio/enemies/generic_%s.%s" % [ranura, ext]
-		if ResourceLoader.exists(p):
-			return load(p)
-	return null
+	return _variantes("res://assets/audio/enemies/generic_%s" % ranura)
 
-## Disparo de un arma. Cae a un sonido de familia si el arma no tiene el suyo, así
-## agregar un arma nueva no obliga a grabar nada.
+## Qué muestra le toca a un arma, sin reproducirla. La usa `audio_report` para
+## poder decir cuál quedó muda. Un arma sin entrada en `ARMA_SONIDO` busca su
+## propio archivo y después el de familia, así que sumar un arma nueva no obliga a
+## grabar ni a declarar nada.
 func weapon_shot(id: String) -> AudioStream:
-	var s := ui("weapons/%s_shot" % id)
+	var src: String = ARMA_SONIDO.get(id, {}).get("src", id)
+	var s := ui("weapons/%s_shot" % src)
 	return s if s != null else ui("weapons/generic_shot")
 
-## Sonido del juego base que no pertenece a un enemigo (armas, jugador, interfaz).
+## Sonido del juego base que no pertenece a un enemigo (armas, jugador, interfaz,
+## pasos). Acepta variantes numeradas igual que todo lo demás.
 func ui(nombre: String) -> AudioStream:
 	var clave := "ui|" + nombre
-	if _cache.has(clave):
-		return _cache[clave]
-	var s: AudioStream = null
-	for ext in ["ogg", "wav", "mp3"]:
-		var p := "res://assets/audio/%s.%s" % [nombre, ext]
+	if not _cache.has(clave):
+		_cache[clave] = _variantes("res://assets/audio/" + nombre)
+	return _elegir(clave)
+
+## Un sonido puede ser UN archivo (`hollow_hit.ogg`) o VARIAS variantes numeradas
+## (`hollow_hit_00.ogg`, `_01`, …), y se devuelven todas las que haya. Poner un
+## archivo más en la carpeta alcanza para sumar variación: no hay que tocar código
+## ni declarar nada.
+func _variantes(base: String) -> Array[AudioStream]:
+	var out: Array[AudioStream] = []
+	for ext in EXTS:
+		var p := "%s.%s" % [base, ext]
 		if ResourceLoader.exists(p):
-			s = load(p)
+			out.append(load(p))
 			break
-	_cache[clave] = s
-	return s
+	for n in MAX_VARIANTES:
+		for ext in EXTS:
+			var p := "%s_%02d.%s" % [base, n, ext]
+			if ResourceLoader.exists(p):
+				out.append(load(p))
+				break
+	return out
+
+## Elige una variante al azar sin repetir la anterior. Escuchar EXACTAMENTE el mismo
+## alarido doscientas veces por partida es la fatiga auditiva más barata de evitar,
+## y el golpe es el caso extremo: la Minigun hace impactar 60 balas por segundo.
+func _elegir(clave: String) -> AudioStream:
+	var lista: Array = _cache[clave]
+	if lista.is_empty():
+		return null
+	if lista.size() == 1:
+		return lista[0]
+	var prev: int = _ultima_variante.get(clave, -1)
+	var i := prev
+	while i == prev:
+		i = _rng.randi_range(0, lista.size() - 1)
+	_ultima_variante[clave] = i
+	return lista[i]
+
+## Cuántas variantes tiene una ranura ya resuelta. Sólo para `audio_report`.
+func variantes_de(clave: String) -> int:
+	return (_cache[clave] as Array).size() if _cache.has(clave) else 0
 
 ## La llama `ModManager.commit()`. El caché es de un autoload: sobrevive a
 ## `reload_current_scene()`, así que sin vaciarlo un mod recién activado seguiría
@@ -177,6 +263,28 @@ func ui(nombre: String) -> AudioStream:
 ## cabeza y con los nombres de animación.
 func clear_cache() -> void:
 	_cache.clear()
+	_ultima_variante.clear()
+
+## Al salir hay que SOLTAR los streams. Si no, Godot cierra con
+## "15 resources still in use at exit": el caché y los reproductores del pool los
+## siguen referenciando pasado el punto en que el motor da los recursos por
+## liberados. No rompe nada, pero la vara de este proyecto es "0 errores en el
+## soak" y un mensaje que aparece siempre entrena a ignorar esa salida — que es
+## justo lo que la hace inútil.
+func _exit_tree() -> void:
+	soltar()
+
+## Suelta TODO stream que este autoload esté reteniendo. Hay que parar el
+## reproductor antes de desengancharle el stream: mientras suena, la reproducción
+## en curso lo sigue referenciando y asignar `null` no alcanza.
+func soltar() -> void:
+	for p: AudioStreamPlayer3D in _p3d:
+		p.stop()
+		p.stream = null
+	for p: AudioStreamPlayer in _pflat:
+		p.stop()
+		p.stream = null
+	clear_cache()
 
 # --- Interno ----------------------------------------------------------------
 
@@ -232,38 +340,3 @@ func _hay_jugador() -> bool:
 func _pos_jugador() -> Vector3:
 	var ps := get_tree().get_nodes_in_group("player")
 	return (ps[0] as Node3D).global_position if ps.size() > 0 else Vector3.ZERO
-
-# --- Pasos --------------------------------------------------------------------
-
-## Variantes de pisada del juego base. Se buscan por número (`step00`, `step01`, …)
-## y NO listando la carpeta: bajo `res://` un `.ogg` pasa por el importador y en un
-## build exportado el nombre del archivo en disco no es el que se ve acá.
-const MAX_PASOS := 16
-
-var _pasos: Array[AudioStream] = []
-var _pasos_listos := false
-var _paso_previo := -1
-
-## Una pisada al azar, nunca la misma dos veces seguidas. Escuchar el MISMO golpe
-## doscientas veces por partida es la fatiga auditiva más barata de evitar.
-func paso() -> AudioStream:
-	if not _pasos_listos:
-		_cargar_pasos()
-	if _pasos.is_empty():
-		return null
-	if _pasos.size() == 1:
-		return _pasos[0]
-	var i := _paso_previo
-	while i == _paso_previo:
-		i = randi() % _pasos.size()
-	_paso_previo = i
-	return _pasos[i]
-
-func _cargar_pasos() -> void:
-	_pasos_listos = true
-	for n in MAX_PASOS:
-		for ext in ["ogg", "wav", "mp3"]:
-			var p := "res://assets/audio/footsteps/step%02d.%s" % [n, ext]
-			if ResourceLoader.exists(p):
-				_pasos.append(load(p))
-				break

@@ -23,6 +23,8 @@ var flash: OmniLight3D
 ## Un enemigo explosivo NO le pega a los otros enemigos a propósito: una oleada de
 ## bichos explosivos se mataría sola en cadena y el jugador miraría.
 func detonate(radius: float, visual_radius: float = -1.0, dmg_centro: float = -1.0, objetivo: String = "enemies") -> void:
+	# Grave y posicional: es lo mas fuerte que suena en el juego.
+	Audio.play_3d(Audio.ui("explosion"), global_position, "explosion", 1.0, 0.5)
 	if visual_radius <= 0.0:
 		visual_radius = radius
 

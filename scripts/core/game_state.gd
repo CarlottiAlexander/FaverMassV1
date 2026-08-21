@@ -100,6 +100,7 @@ func end_run(win: bool, titulo := "", detalle := "", stats: Array = []) -> void:
 	if state == State.DEAD or state == State.WON:
 		return   # ya terminó; un modo que llama dos veces no rompe nada
 	run_result = {"win": win, "titulo": titulo, "detalle": detalle, "stats": stats}
+	Audio.play_flat(Audio.ui("victory" if win else "defeat"))
 	change_state(State.WON if win else State.DEAD)
 
 ## Resultado de la partida terminada, para la pantalla final.

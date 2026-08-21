@@ -103,7 +103,7 @@ func _hit_enemy(body: Node, point: Vector3) -> void:
 	FxManager.spawn_damage_number(point, dmg, is_hs)
 	# Impacto: posicional, donde pegó. El headshot suena distinto porque es la
 	# información más valiosa que el juego le puede dar al jugador sin mirar el HUD.
-	Audio.play_3d(Audio.ui("impact_headshot" if is_hs else "impact"), point, "impact")
+	Audio.play_3d(Audio.ui("impact_headshot" if is_hs else "impact"), point, "impact", 1.0, 0.85 if is_hs else 1.0)
 	if shooter and shooter.has_signal("hit_confirmed"):
 		shooter.hit_confirmed.emit(is_hs)
 	hits += 1

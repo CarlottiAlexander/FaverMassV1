@@ -164,7 +164,7 @@ func _procesar_pasos(delta: float, crouching: bool) -> void:
 	paso_dist = 0.0
 	# Agachado se camina despacio y CALLADO: es la única forma que tiene el jugador
 	# de decidir cuánto ruido hace.
-	Audio.play_flat(Audio.paso(), "paso", 0.35 if crouching else 0.7)
+	Audio.play_flat(Audio.ui("footsteps/step"), "paso", 0.35 if crouching else 0.7)
 
 ## Red de seguridad del borde del mapa. El tech de salto de escopeta/cohete
 ## (sección 3.6) es deliberado y se puede ENCADENAR en el aire — cada disparo al
@@ -363,7 +363,7 @@ func _apply_recoil_and_shake(w: Dictionary) -> void:
 	# Único punto por el que pasan TODOS los disparos de proyectil. Va plano y no
 	# posicional: tu propia arma no tiene que atenuarse con la distancia.
 	# La clave le pone el intervalo mínimo: la Minigun llega a 60 disparos/s.
-	Audio.play_flat(Audio.weapon_shot(current_weapon), "shot")
+	Audio.play_weapon(current_weapon)
 
 func _try_movement_tech() -> void:
 	if current_weapon != "shotgun" and current_weapon != "rocket":

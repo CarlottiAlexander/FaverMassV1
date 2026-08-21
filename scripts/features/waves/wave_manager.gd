@@ -59,6 +59,7 @@ func start_wave() -> void:
 	wave_active = true
 	first_alpha_assigned = false
 	GameState.run_wave = wave
+	Audio.play_flat(Audio.ui("wave_start"), "", 0.8)
 
 	# La oleada se recorta al techo de enemigos y lo que se pierde en CANTIDAD se
 	# devuelve en vida/velocidad/daño. La composición cruda se pide UNA sola vez
