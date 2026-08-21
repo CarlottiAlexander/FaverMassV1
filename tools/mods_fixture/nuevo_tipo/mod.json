@@ -17,6 +17,14 @@
 
       "spawn": { "min_wave": 4, "share": 0.08, "flat": 1 },
 
+      "sounds": {
+        "attack": "audio/mordida.ogg",
+        "hit":    ["audio/dolor1.ogg", "audio/dolor2.ogg"],
+        "death":  "audio/muerte.ogg",
+        "volume": 0.8,
+        "inherit": "dire_bat"
+      },
+
       "traits": {
         "explode_on_death": { "radius": 7.0, "damage": 35 },
         "shield": { "amount": 40, "regen_delay": 2.5, "regen_rate": 12 },

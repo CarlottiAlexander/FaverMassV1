@@ -184,9 +184,9 @@ func resolver(tipo: String, ranura: String) -> AudioStream:
 	var clave := "%s|%s" % [tipo, ranura]
 	if not _cache.has(clave):
 		var lista: Array[AudioStream] = []
-		var m: AudioStream = ModManager.sound_for(tipo, ranura)
-		if m != null:
-			lista.append(m)
+		var del_mod: Array = ModManager.sounds_for(tipo, ranura)
+		if not del_mod.is_empty():
+			lista.assign(del_mod)
 		elif not ModManager.sound_is_silent(tipo):
 			lista = _base(ModManager.sound_inherit_of(tipo), ranura)
 		_cache[clave] = lista

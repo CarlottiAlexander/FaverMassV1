@@ -28,6 +28,14 @@ const PRESETS := ["chaser", "flyer", "weaver", "wobbler", "brute", "stalker", "o
 ## Campos que se copian tal cual a la fila de stats.
 const CAMPOS_STATS := ["hp", "speed", "damage", "atk_cd", "xp", "regen", "radius", "height", "head_radius"]
 
+## Ranuras de sonido que un mod puede declarar. Es una lista CERRADA a propósito:
+## así un `"deat"` mal escrito se avisa en vez de guardarse en silencio y dejar al
+## modder buscando por qué su bicho no suena.
+const RANURAS_SONIDO := ["attack", "hit", "death", "spawn", "step"]
+## Tope de variantes por ranura. Más que esto no aporta variación audible y sí
+## memoria: cada una es un stream cargado y residente.
+const MAX_VARIANTES_SONIDO := 8
+
 ## Devuelve {ok, error, name, author, version, enemies, warnings}.
 ## `enemies` es {tipo: {stats, spawn, color, model, opts, preset, declara_color}}.
 static func parse(json_path: String, mod_dir: String) -> Dictionary:
@@ -214,8 +222,91 @@ static func _un_enemigo(tipo: String, c: Dictionary, mod_dir: String) -> Diction
 		"stats": stats, "spawn": spawn, "color": color, "declara_color": declara_color,
 		"model": modelo, "preset": preset, "opts": _opciones_modelo(c),
 		"traits": traits, "existia": existe,
+		"sounds": _sonidos(tipo, c, mod_dir, res, existe),
 	}
 	return res
+
+## Resuelve la sección `"sounds"` a RUTAS, no a streams: cargarlas es tarea de
+## `ModManager` con `ModSoundLoader`, igual que con los modelos. Acá sólo se valida
+## que las rutas estén adentro de la carpeta del mod y que las ranuras existan.
+##
+## Forma esperada:
+##     "sounds": {
+##       "attack": "audio/mordida.ogg",
+##       "hit":    ["audio/dolor1.ogg", "audio/dolor2.ogg"],
+##       "volume": 0.8, "inherit": "hollow", "silent": false
+##     }
+##
+## Una LISTA es variación al azar. No es un lujo: escuchar exactamente el mismo
+## alarido doscientas veces por partida es la fatiga auditiva más barata de evitar,
+## y sale gratis.
+static func _sonidos(tipo: String, c: Dictionary, mod_dir: String, res: Dictionary, existe: bool) -> Dictionary:
+	var out := {}
+	var sc = c.get("sounds", {})
+	if typeof(sc) != TYPE_DICTIONARY:
+		if c.has("sounds"):
+			res["warnings"].append("\"%s\": \"sounds\" se ignoró, no es un objeto" % tipo)
+		return out
+
+	# `silent` es el opt-out explícito: mudo A PROPÓSITO, sin heredar nada. Es
+	# distinto de "no declaró nada", que hereda del tipo base — las dos intenciones
+	# tienen que ser expresables o el sistema decide por el modder.
+	if bool(sc.get("silent", false)):
+		out["_silent"] = true
+	# De qué tipo base sacar lo que no declaró. Por defecto el tipo que reemplaza;
+	# si es nuevo, el Hollow, que es el enemigo más neutro que hay.
+	out["_inherit"] = String(sc.get("inherit", tipo if existe else "hollow"))
+	# Los packs vienen con niveles dispares y normalizarlos a mano no es razonable.
+	var vol := float(sc.get("volume", 1.0))
+	var vol2 := clampf(vol, 0.0, 2.0)
+	if not is_equal_approx(vol, vol2):
+		res["warnings"].append("\"%s\": volume=%s quedó fuera de rango, se ajustó a %s" % [tipo, vol, vol2])
+	out["_volume"] = vol2
+
+	for clave in sc:
+		var k := String(clave)
+		if k in ["silent", "inherit", "volume"]:
+			continue
+		if not RANURAS_SONIDO.has(k):
+			res["warnings"].append("\"%s\": la ranura de sonido \"%s\" no existe (hay: %s)" % [
+				tipo, k, ", ".join(RANURAS_SONIDO)])
+			continue
+		var crudo = sc[k]
+		var relativas: Array = crudo if typeof(crudo) == TYPE_ARRAY else [crudo]
+		var rutas: Array = []
+		for r in relativas:
+			if rutas.size() >= MAX_VARIANTES_SONIDO:
+				res["warnings"].append("\"%s\": \"%s\" tiene más de %d variantes; se usan las primeras" % [
+					tipo, k, MAX_VARIANTES_SONIDO])
+				break
+			var rel := String(r)
+			var abs := mod_dir.path_join(rel).simplify_path()
+			# Un mod no puede leer fuera de su carpeta. Misma regla que el modelo:
+			# sin esto, `"../../../Windows/..."` sería una ruta válida.
+			if not abs.begins_with(mod_dir):
+				res["warnings"].append("\"%s\": la ruta de sonido \"%s\" sale de la carpeta del mod" % [tipo, rel])
+				continue
+			if not FileAccess.file_exists(abs):
+				res["warnings"].append("\"%s\": no existe el sonido \"%s\"" % [tipo, rel])
+				continue
+			# La extensión se rechaza ACÁ y no recién al cargar. Si no, el manifiesto
+			# guarda una ruta que después falla, y `mod_report` — que lee el
+			# manifiesto — anuncia una ranura que en realidad quedó muerta. Una
+			# herramienta que miente sobre lo que cargó es peor que no tenerla.
+			if not ModSoundLoader.EXTENSIONES.has(abs.get_extension().to_lower()):
+				res["warnings"].append("\"%s\": \"%s\" no es un formato de audio soportado (usar %s)" % [
+					tipo, rel, ", ".join(ModSoundLoader.EXTENSIONES)])
+				continue
+			rutas.append(abs)
+		if not rutas.is_empty():
+			out[k] = rutas
+
+	# Declarar sonidos Y pedir silencio a la vez es contradictorio, y casi seguro
+	# quedó `silent` de una prueba anterior. Gana el silencio (es lo explícito),
+	# pero se avisa, porque si no el modder ve sus archivos ignorados sin motivo.
+	if out.get("_silent", false) and out.size() > 3:
+		res["warnings"].append("\"%s\": declara sonidos pero también \"silent\": true; queda MUDO" % tipo)
+	return out
 
 ## Valida los parámetros de un rasgo contra `EnemyTraits.REGISTRO`, que es la única
 ## fuente de verdad de qué acepta cada uno y entre qué valores.

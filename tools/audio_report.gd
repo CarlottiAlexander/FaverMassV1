@@ -18,13 +18,21 @@ func _ready() -> void:
 		print("  %-10s %6.2f dB" % [AudioServer.get_bus_name(i), AudioServer.get_bus_volume_db(i)])
 	print("  volumen guardado: master=%.2f  sfx=%.2f" % [Config.master_volume, Config.sfx_volume])
 
-	print("\nENEMIGOS   (n = cuántas variantes; '—' = mudo)")
+	print("\nENEMIGOS   (n = variantes; * = lo trajo el MOD; '—' = mudo)")
 	for t: String in GameData.enemy_types():
 		var linea := "  %-14s" % t
 		for r: String in RANURAS:
 			Audio.resolver(t, r)
 			var n := Audio.variantes_de("%s|%s" % [t, r])
-			linea += "  %s:%s" % [r, str(n) if n > 0 else "—"]
+			# Distinguir "lo trajo el mod" de "lo heredó" es LA pregunta que esta
+			# herramienta tiene que contestar: un modder que declaró un sonido y
+			# escucha otro necesita ver que su archivo no entró.
+			var propio := "*" if not ModManager.sounds_for(t, r).is_empty() else " "
+			linea += "  %s:%s%s" % [r, str(n) if n > 0 else "—", propio]
+		if ModManager.sound_is_silent(t):
+			linea += "   [MUDO a propósito]"
+		elif ModManager.sound_inherit_of(t) != t:
+			linea += "   hereda de \"%s\"" % ModManager.sound_inherit_of(t)
 		print(linea)
 
 	print("\nARMAS      (muestra que le toca y a qué tono)")

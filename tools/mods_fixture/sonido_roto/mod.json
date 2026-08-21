@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "name": "Sonido roto",
+  "author": "fixture",
+  "version": "1.0",
+  "_comentario": "Existe para probar que NINGUN sonido malo rompe nada. Cada ranura de aca ejercita un camino de falla distinto.",
+
+  "enemies": {
+    "hollow": {
+      "sounds": {
+        "hit":    ["audio/truncado.ogg", "audio/no_existe.ogg"],
+        "death":  "../../../fuera_del_mod.ogg",
+        "attack": "audio/cosa.txt",
+        "muerte": "audio/truncado.ogg",
+        "volume": 5.0
+      }
+    }
+  }
+}

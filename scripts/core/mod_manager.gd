@@ -247,6 +247,13 @@ func commit() -> void:
 			if not op.is_empty():
 				_opts[t] = op
 
+			# Los sonidos van con los DATOS y no con el modelo: un sonido que falla
+			# no puede impedir que el enemigo exista, y un modelo que falla no puede
+			# dejarlo mudo. Son dos fallas independientes.
+			var sc: Dictionary = d.get("sounds", {})
+			if not sc.is_empty():
+				_sounds[t] = _cargar_sonidos(t, sc, notas)
+
 			var ruta := String(d.get("model", ""))
 			if ruta == "":
 				continue
@@ -320,20 +327,46 @@ func traits_of(enemy_type: String) -> Dictionary:
 	return _traits.get(enemy_type, {})
 
 # --- Sonidos ----------------------------------------------------------------
-# El contrato que consume `Audio.resolver()`. Se llena cuando los mods puedan
-# declarar sonidos; hasta entonces devuelve los valores neutros, que hacen que todo
-# caiga al sonido del juego base.
+# El contrato que consume `Audio.resolver()`. Un tipo sin nada declarado devuelve
+# los valores neutros, que hacen que todo caiga al sonido del juego base.
 
-## Stream declarado por el mod para esta ranura, o null. Una ranura con varias
-## opciones devuelve una al azar: es lo que evita escuchar el mismo golpe 200 veces.
-func sound_for(enemy_type: String, ranura: String) -> AudioStream:
+## Carga las rutas que resolvió `ModManifest` y devuelve la misma estructura con
+## streams en lugar de rutas.
+##
+## Un archivo que falla se descarta CON AVISO y las demás variantes de esa misma
+## ranura entran igual: que un `.ogg` truncado deje mudo a todo el bicho sería una
+## falla desproporcionada. Si se caen todas, la ranura no queda en la lista y la
+## cadena de `Audio.resolver()` la hereda del tipo base sola.
+func _cargar_sonidos(tipo: String, decl: Dictionary, notas: Array) -> Dictionary:
+	var out := {}
+	for k in decl:
+		var clave := String(k)
+		if clave.begins_with("_"):
+			out[clave] = decl[clave]   # _silent / _inherit / _volume pasan tal cual
+			continue
+		var streams: Array[AudioStream] = []
+		for ruta in (decl[clave] as Array):
+			var r := ModSoundLoader.load_sound(String(ruta))
+			for w: String in r["warnings"]:
+				notas.append("%s/%s: %s" % [tipo, clave, w])
+			if r["error"] != "":
+				notas.append("%s/%s: %s (se hereda el sonido base)" % [tipo, clave, r["error"]])
+				continue
+			streams.append(r["stream"])
+		if not streams.is_empty():
+			out[clave] = streams
+	return out
+
+## TODAS las variantes que el mod declaró para esta ranura, o vacío.
+##
+## Devuelve la lista COMPLETA y no una ya elegida a propósito: quien elige es
+## `Audio`, que tiene su propio RNG. Si acá se llamara a `pick_random()` se estaría
+## consumiendo el RNG GLOBAL, y en este proyecto esa secuencia es un invariante de
+## balance — la composición de oleada pasaría a depender de cuántos golpes sonaron.
+func sounds_for(enemy_type: String, ranura: String) -> Array:
 	var s: Dictionary = _sounds.get(enemy_type, {})
 	var v = s.get(ranura, null)
-	if v == null:
-		return null
-	if v is Array:
-		return null if (v as Array).is_empty() else (v as Array).pick_random()
-	return v
+	return (v as Array) if v is Array else []
 
 ## El mod pidió quedarse MUDO a propósito. Distinto de "no declaró nada", que
 ## hereda del tipo base.

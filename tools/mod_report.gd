@@ -77,6 +77,7 @@ func _print_mod(e: Dictionary) -> void:
 					var ps: Dictionary = tr[n]
 					partes.append(n if ps.is_empty() else "%s(%s)" % [n, ", ".join(PackedStringArray(ps.keys()))])
 				print("      rasgos: %s" % ", ".join(PackedStringArray(partes)))
+		_print_sounds(t, d.get("sounds", {}))
 		if String(d.get("model", "")) != "":
 			_print_model(t, d["model"])
 
@@ -203,3 +204,25 @@ func _print_slot(ap: AnimationPlayer, etiqueta: String, candidatos: Array) -> vo
 		print("      %s -> %s  (deducida por nombre)" % [etiqueta, g])
 	else:
 		print("      %s -> NO RESUELVE (probó: %s)" % [etiqueta, ", ".join(candidatos)])
+
+## Qué sonidos declaró el mod para este tipo. Las RUTAS, no los streams: esta
+## herramienta lee el manifiesto sin haber hecho `commit()`, así que muestra lo que
+## el mod PIDIÓ. Lo que efectivamente sonó lo dice `tools/audio_report.tscn`.
+func _print_sounds(_t: String, s: Dictionary) -> void:
+	if s.is_empty():
+		return
+	if bool(s.get("_silent", false)):
+		print("      sonido: MUDO a propósito (\"silent\": true)")
+		return
+	var partes: Array = []
+	for k in s:
+		var clave := String(k)
+		if clave.begins_with("_"):
+			continue
+		var n: int = (s[clave] as Array).size()
+		partes.append(clave if n == 1 else "%s x%d" % [clave, n])
+	if partes.is_empty():
+		print("      sonido: no quedó ninguna ranura usable (ver avisos)")
+	else:
+		print("      sonido: %s   | hereda de \"%s\", volumen %.2f" % [
+			", ".join(PackedStringArray(partes)), s.get("_inherit", "?"), s.get("_volume", 1.0)])
